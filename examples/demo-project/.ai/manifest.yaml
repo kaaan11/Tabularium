@@ -1,0 +1,6 @@
+# Canonical Project Manifest v1.0 template.
+# title is optional, non-authoritative display metadata.
+
+manifest_version: "1.0"
+tabularium_ruleset: "0.3.0.dev0"
+# title: "Human-confirmed project title"

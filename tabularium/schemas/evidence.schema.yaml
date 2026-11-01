@@ -1,0 +1,709 @@
+# Tabularium Evidence Contract
+#
+# The second formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Evidence records against
+# the definitions below.
+schema: evidence
+schema_version: "1.4"
+title: Tabularium Evidence Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Evidence contract.
+  - version: "1.1"
+    change: >
+      Approved amendment. `observation` became REQUIRED — a record containing
+      only source metadata is not sufficient as Evidence. Added `title` as a
+      REQUIRED short human-scannable label. Documented the supersession
+      relationship as two directional views of one relationship. No conclusion
+      field was added, and no field, enum, or lifecycle rule was otherwise
+      changed.
+  - version: "1.2"
+    change: >
+      DOCUMENTATION / REFERENCE CONSISTENCY AMENDMENT ONLY.
+
+      Corrected statements that had become false once the Investigation
+      contract was defined: the `investigation` field no longer claims that the
+      Investigation schema is not implemented, and the `references` convention
+      now names Investigation among the contracts that exist.
+
+      BEHAVIORALLY IDENTICAL TO 1.1. No field was added, removed, or renamed.
+      No required field, source_type value, reliability value, lifecycle state,
+      transition, immutability rule, or supersession rule was touched. A record
+      conforming to 1.1 conforms to 1.2 with only its `schema_version` value
+      updated.
+  - version: "1.3"
+    change: >
+      Approved amendment (B1). Reference normalization under the shared
+      reference policy now recorded in README.md.
+
+      Two relationship fields pointing at formalized record types carried no
+      canonical id pattern: `investigation` and `decision`. Each now requires
+      the target contract's canonical id — INV and DEC respectively — matching
+      how `task` and the EVD fields were already constrained.
+
+      SEMANTIC: this narrows the valid record set. A record that previously
+      carried an arbitrary string in either field no longer conforms. No
+      records exist, so nothing is affected in practice.
+
+      `questions` points at a NOT-YET-FORMALIZED type and deliberately received
+      no pattern. No id format was invented for Question.
+
+      B2 clarification, documentation-only: project membership is positional,
+      and the optional `project` field is non-authoritative annotation.
+
+      No field was added or removed. No source_type value, reliability value,
+      lifecycle state, transition, immutability rule, or supersession rule
+      changed.
+
+  - version: "1.4"
+    change: >
+      Approved amendment (Question v1.0). Reference normalization under the
+      shared reference policy in README.md.
+
+      `questions` pointed at a NOT-YET-FORMALIZED type and carried no canonical
+      id pattern. Question is now a formalized record type
+      (question.schema.yaml), so the field requires QST ids.
+
+      SEMANTIC: this narrows the valid record set. No records exist, so nothing
+      is affected in practice.
+
+      No field was added or removed. No source_type value, reliability value,
+      lifecycle state, transition, immutability rule, or supersession rule
+      changed.
+description: >
+  An Evidence record records what was observed, sourced, tested, or asserted.
+  It is the second link in the reasoning chain and never the last one.
+
+reasoning_chain:
+  chain: SOURCE -> EVIDENCE -> INVESTIGATION -> CONCLUSION -> DECISION
+  detail: >
+    A SOURCE is where information came from. EVIDENCE records what was obtained
+    from it. An INVESTIGATION analyses evidence. A CONCLUSION is what the
+    analysis found. A DECISION is an explicit choice made by the human
+    authority.
+
+    Evidence sits at the second position and stops there. It does not analyse,
+    conclude, or decide. Investigation and Decision each have their own
+    contract (investigation.schema.yaml, decision.schema.yaml). Conclusion has
+    no schema — it is NOT IMPLEMENTED and none was created here.
+
+# ---------------------------------------------------------------------------
+# EPISTEMIC RULES
+# ---------------------------------------------------------------------------
+#
+# These are the reason the contract exists. They constrain what an Evidence
+# record may claim, and they are not overridden by convenience.
+
+epistemic_rules:
+
+  evidence_is_not_truth: >
+    Evidence is NOT automatically truth. A record establishes that something
+    was observed, obtained, or asserted — not that the thing asserted is
+    correct.
+
+  no_silent_verification: >
+    An AI-generated statement must not silently become verified evidence.
+    Recording a model output as Evidence records the fact of the output, and
+    nothing more.
+
+  worked_example:
+    record: >
+      source_type: MODEL_ASSERTION, observation: "Authentication probably fails
+      because of middleware X."
+    is_evidence_that: The model made this assertion.
+    is_NOT_evidence_that: Middleware X is the cause.
+    to_establish_the_cause: >
+      Test it independently and record the result as a separate EXPERIMENT or
+      OBSERVATION record. That record establishes the test result — which is
+      still not the same thing as a conclusion.
+
+  evidence_vs_opinion: >
+    Evidence and opinion are distinct and are never presented as one another
+    (immutable principle 2). A record whose source_type is MODEL_ASSERTION or
+    INFERENCE is evidence of an opinion having been expressed, not evidence for
+    the opinion.
+
+  no_conclusion_field: >
+    This contract deliberately has NO conclusion field. Interpretation belongs
+    to Investigation or a future reasoning layer, not to the record of what was
+    observed. Do not add one.
+
+# ---------------------------------------------------------------------------
+# IMMUTABILITY
+# ---------------------------------------------------------------------------
+
+immutability:
+
+  rule: >
+    An Evidence record is IMMUTABLE after creation with respect to its
+    substantive observation and source content. What was observed at the time
+    it was observed does not change later.
+
+  when_evidence_turns_out_to_be_wrong: >
+    Do not rewrite the original observation. Instead:
+      1. mark the original record SUPERSEDED or RETRACTED,
+      2. create a new Evidence record,
+      3. reference the old record where appropriate
+         (supersedes / superseded_by / related_evidence).
+
+  what_may_change: >
+    The fields that record the CURRENT assessment or lifecycle position of a
+    record may change: status, reliability, superseded_by, and the relationship
+    fields. Changing them is a change to how the record is regarded, not to
+    what it says was observed.
+
+  no_deletion: >
+    Evidence records are not deleted merely because they became invalid.
+    Evidence history is preserved (immutable principle 5). A retracted record
+    stays, marked RETRACTED.
+
+  enforcement: >
+    NOT IMPLEMENTED. This is a protocol and contract rule at this stage.
+    Nothing technically prevents a record from being rewritten; that guarantee
+    currently rests on Git history and on following this rule.
+
+# ---------------------------------------------------------------------------
+# SUPERSESSION
+# ---------------------------------------------------------------------------
+
+supersession:
+
+  relationship: >
+    If EVD-A is superseded by EVD-B, then:
+      EVD-A may contain  superseded_by: [EVD-B]
+      EVD-B may contain  supersedes:    [EVD-A]
+
+  two_views_one_relationship: >
+    These are two DIRECTIONAL VIEWS of the same relationship, not two separate
+    facts. `supersedes` is the forward view, `superseded_by` the reverse.
+
+  one_sided_is_valid: >
+    If only one side exists, the record is still STRUCTURALLY VALID at this
+    stage. Consistency between the two sides is a future mechanism.
+
+  semantics_are_contract_specific: >
+    Supersession semantics are defined per contract — see README.md
+    ("Supersession semantics are contract-specific"), which is the
+    authoritative statement.
+
+    Evidence supersession expresses EVIDENTIARY LINEAGE: a later record has
+    overtaken an earlier one. It deliberately does NOT inherit the stronger
+    rules Decision applies to its own supersession — Evidence supersession is
+    not reciprocity-required, not approval-bound, and not monotonic, and it is
+    not strengthened for symmetry with Decision.
+
+    That is a difference in relationship semantics, not in epistemic standing.
+
+  not_implemented:
+    reciprocal_updates: >
+      NOT IMPLEMENTED. Writing one side does not update the other. Nothing
+      propagates, mirrors, or synchronises the two records.
+    referential_integrity: >
+      NOT IMPLEMENTED. Nothing verifies that a referenced record exists, that
+      the reverse reference is present, or that a superseded record carries
+      status SUPERSEDED.
+    relationship_database: >
+      NOT IMPLEMENTED. There is no relationship database, graph, or index, and
+      none is implied by these fields.
+
+  status_is_separate: >
+    Supersession references and lifecycle status are set independently.
+    Recording `superseded_by` does not set a record's status to SUPERSEDED; the
+    status is changed explicitly. See lifecycle below.
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Eight fields are required: identity, a short label, what kind of evidence it
+    is, its lifecycle position, what was observed, and provenance. Everything
+    else is optional, so that recording a single observation stays cheap.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO default values.
+    Missing information must not be fabricated.
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset, e.g.
+    "2026-08-16T14:05:00Z". Formatting convention only; no clock authority or
+    ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is the authoritative statement; this contract's only addition is the
+    supersession relationship below, which stays as it is — one-sided
+    supersession remains structurally valid for Evidence.
+
+    In summary as it applies here: references to formalized record types use
+    the target's canonical id (TASK, INV, DEC, EVD, QST). Nothing
+    resolves a reference, a reference that does not resolve does not invalidate
+    the record, references are project-local, and cross-project resolution is
+    NOT IMPLEMENTED.
+
+  extensibility: >
+    Fields not defined in this contract must not be added silently. An
+    unrecognized field is a contract violation, not an extension point. Adding
+    a field requires a recorded decision by the human authority.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "EVD-YYYY-NNNN"
+  regex: "^EVD-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the project evidence namespace
+  examples:
+    - EVD-2026-0001
+    - EVD-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic ID allocation is deliberately out of scope. Who
+    allocates the next number, and how collisions are prevented, is
+    NOT SPECIFIED.
+  sequence_exhaustion: >
+    NOT SPECIFIED. The behavior beyond 9999 records in one year has no defined
+    answer.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND RECORD FORMAT
+# ---------------------------------------------------------------------------
+
+storage:
+
+  location: ".ai/evidence/"
+  description: >
+    Evidence records belong in the `.ai/evidence/` directory of a project's AI
+    context. See ../templates/project/README.md for the full structure.
+
+  file_naming:
+    pattern: ".ai/evidence/EVD-YYYY-NNNN.md"
+    regex: "^\\.ai/evidence/EVD-[0-9]{4}-[0-9]{4}\\.md$"
+    rule: >
+      The filename MUST equal the Evidence id, with the .md extension. A record
+      whose filename and id disagree is invalid; neither one silently wins.
+    example: ".ai/evidence/EVD-2026-0001.md"
+
+  discovery: >
+    Records are found by their filename, which is the id. Nothing indexes,
+    lists, caches, or queries them. There is NO evidence database, and none is
+    implied by this location.
+
+record_format:
+
+  canonical: Markdown document with YAML frontmatter
+  extension: ".md"
+  example: ../templates/evidence/evidence.md
+
+  authority: >
+    Machine-authoritative Evidence metadata lives in the YAML frontmatter.
+    Human- and model-readable narrative lives in the Markdown body.
+
+    Every field defined in this contract lives in the frontmatter and is
+    validated against it. The body defines no fields and carries no authority.
+    Where body and frontmatter appear to disagree, the frontmatter governs.
+
+  no_second_authoritative_copy: >
+    An authoritative field must not have a second authoritative copy in the
+    body. The body must not restate an id, an enumerated value, a timestamp, or
+    a reference as though it were the record.
+
+    The body MAY narrate: what was run, what the output looked like, what is
+    uncertain about it, what the record does not establish.
+
+  body_sections: >
+    The canonical example uses "## Observation", "## Source", and "## Notes".
+    This is the shape of the example, not a validated structure — no section is
+    required, and nothing parses the body.
+
+# ---------------------------------------------------------------------------
+# REQUIRED FIELDS
+# ---------------------------------------------------------------------------
+
+required_fields:
+  - schema_version
+  - id
+  - title
+  - source_type
+  - status
+  - observation
+  - collected_at
+  - collected_by
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  # --- identity -----------------------------------------------------------
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.4"]
+    description: >
+      The version of this contract that the record conforms to. Carried on the
+      record so a future validator can select the correct contract.
+      Migration of records written against 1.0 is NOT IMPLEMENTED. 1.2 is a
+      documentation-only amendment, so a 1.1 record needs no change other than
+      this value.
+
+  id:
+    type: string
+    required: true
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: EVD-2026-0001
+
+  title:
+    type: string
+    required: true
+    description: >
+      A short, human-scannable label for the record. It exists so a directory
+      of EVD-YYYY-NNNN.md files can be read without opening every file.
+
+      Rules:
+        - it is a short identifier, one line
+        - it is NOT a conclusion
+        - it does NOT replace `observation`
+        - it does NOT need to contain the Evidence id
+        - it should NOT duplicate the full observation
+
+      "Authentication tests failed after deployment" is a title. "Middleware X
+      breaks authentication" is a conclusion and does not belong in a title or
+      anywhere else in an Evidence record.
+    example: Authentication tests failed after deployment
+
+  # --- what kind of evidence this is --------------------------------------
+
+  source_type:
+    type: enum
+    required: true
+    allowed_values:
+      - PRIMARY_SOURCE
+      - SECONDARY_SOURCE
+      - OBSERVATION
+      - EXPERIMENT
+      - MODEL_ASSERTION
+      - USER_ASSERTION
+      - INFERENCE
+    meanings:
+      PRIMARY_SOURCE: direct authoritative source relevant to the claim
+      SECONDARY_SOURCE: indirect or derivative source
+      OBSERVATION: directly observed state/data
+      EXPERIMENT: result produced by a controlled test or experiment
+      MODEL_ASSERTION: claim produced by an AI model without independent verification
+      USER_ASSERTION: information explicitly supplied by the user
+      INFERENCE: derived claim or reasoning that is not itself a direct observation
+    description: >
+      What kind of thing this evidence is.
+
+      source_type is NOT a reliability score. It says what sort of evidence was
+      obtained, not how much it should be trusted. Reliability is assessed
+      separately and independently — see the reliability field.
+
+      The vocabulary is closed. No value outside this list is valid.
+
+  # --- how much it can currently be relied on -----------------------------
+
+  reliability:
+    type: enum
+    required: false
+    allowed_values: [LOW, MEDIUM, HIGH, UNKNOWN]
+    description: >
+      The CURRENT assessment of this evidence itself.
+
+      Reliability must NOT be derived from source_type. A PRIMARY_SOURCE is not
+      automatically HIGH; a MODEL_ASSERTION is not automatically LOW. Each
+      record is assessed on what it actually is.
+
+      UNKNOWN states that the reliability has been considered and is not known.
+      Omitting the field states that it has not been assessed at all. These are
+      different, and neither is a default.
+
+  # --- lifecycle ----------------------------------------------------------
+
+  status:
+    type: enum
+    required: true
+    allowed_values: [ACTIVE, SUPERSEDED, RETRACTED]
+    meanings:
+      ACTIVE: currently usable evidence
+      SUPERSEDED: replaced by newer or more accurate evidence
+      RETRACTED: explicitly withdrawn because it should no longer be relied upon
+    description: >
+      Lifecycle position of the record. See lifecycle below.
+
+      SUPERSEDED and RETRACTED records are kept, not deleted. Changing status
+      does not change what the record says was observed.
+
+  # --- substance ----------------------------------------------------------
+
+  observation:
+    type: string
+    required: true
+    description: >
+      What was actually obtained, observed, or asserted — stated as what
+      happened, not as what it means.
+
+      REQUIRED. An Evidence record must contain what was actually observed. A
+      record carrying only source metadata is not sufficient as Evidence: it
+      records that a source was consulted, not what came of it.
+
+      This field holds the substance of the record and is covered by the
+      immutability rule: once created it is not rewritten.
+
+      It is NOT an interpretation. "Three authentication tests failed" is an
+      observation; "authentication is broken by middleware X" is a conclusion
+      and does not belong in an Evidence record at all.
+
+  source:
+    type: string
+    required: false
+    description: >
+      Where the evidence came from, in free-form terms. Intentionally flexible
+      at this stage.
+
+      Examples: official documentation, repository file, test output, log,
+      PCAP, paper, user statement, model output.
+
+      There is NO source registry and no controlled vocabulary. None should be
+      invented here.
+
+  source_locator:
+    type: string
+    required: false
+    description: >
+      How to find the source: a path, a URL, a command, a log identifier, a
+      citation, a timestamp range — whatever locates it.
+
+      A URL is NOT required, and NO URL validation is defined or performed.
+      Not every source has a locator; omit the field when there is none.
+
+  # --- relationships ------------------------------------------------------
+  #
+  # All optional. All opaque strings. Only Task has a contract.
+
+  project:
+    type: string
+    required: false
+    description: >
+      Optional NON-AUTHORITATIVE project locator / annotation.
+
+      Project membership is POSITIONAL: this record belongs to the project
+      whose `.ai/` directory contains it. This field does NOT determine
+      membership and MUST NOT override it — where the two disagree, the
+      location governs.
+
+      The Project schema is NOT IMPLEMENTED and the project identifier format
+      is NOT SPECIFIED. See README.md ("Project scoping").
+
+  task:
+    type: string
+    required: false
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Task during which this evidence was collected. Task has a contract
+      (task.schema.yaml); the reference is still opaque and unresolved.
+
+  investigation:
+    type: string
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Investigation this evidence feeds. Investigation has a contract
+      (investigation.schema.yaml); the reference is still an opaque string and
+      nothing resolves it. An Investigation citing this record changes nothing
+      about it — see evidence_independence in that contract.
+
+  decision:
+    type: string
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Decision this evidence was used for. Decision has a contract
+      (decision.schema.yaml); the reference is still an opaque string and
+      nothing resolves it. Referencing a decision does not make this record the
+      basis of it.
+
+  questions:
+    type: list[string]
+    required: false
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Question records this Evidence bears on. Question has a contract
+      (question.schema.yaml); each reference remains opaque and unresolved.
+
+  related_evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: Other Evidence records related to this one. The relation is untyped.
+
+  supersedes:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence records this one replaces. The forward view of the supersession
+      relationship — see the supersession section.
+
+  superseded_by:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence records that replace this one. The reverse view of the
+      supersession relationship — see the supersession section. Recording it
+      does not by itself change this record's status; status is set explicitly.
+
+  # --- provenance ---------------------------------------------------------
+
+  collected_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: >
+      When the evidence was collected. This is the event this record is about,
+      so no separate created_at field exists.
+    example: "2026-08-16T13:40:00Z"
+
+  collected_by:
+    type: string
+    required: true
+    description: >
+      Who or what collected the evidence. An OPAQUE IDENTIFIER — no identity
+      system exists, and nothing resolves, verifies, or authenticates the
+      value. It stays opaque until an identity model is designed.
+
+# ---------------------------------------------------------------------------
+# LIFECYCLE
+# ---------------------------------------------------------------------------
+
+lifecycle:
+
+  states: [ACTIVE, SUPERSEDED, RETRACTED]
+
+  transitions:
+    ACTIVE:     [SUPERSEDED, RETRACTED]
+    SUPERSEDED: [RETRACTED]
+    RETRACTED:  []
+
+  rules: >
+    A record starts ACTIVE. It becomes SUPERSEDED when newer or more accurate
+    evidence replaces it, and RETRACTED when it is explicitly withdrawn.
+    Superseded evidence can still later be retracted; retracted evidence is not
+    reinstated — collect new evidence instead.
+
+    A status change never rewrites the observation.
+
+  no_deletion: >
+    No transition deletes a record. Evidence history is preserved.
+
+  enforcement: >
+    NOT IMPLEMENTED. Documented, not enforced.
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+
+limitations:
+
+  evidence_database:
+    status: NOT IMPLEMENTED
+    detail: >
+      There is no evidence database, index, search, or query mechanism. Records
+      are files found by name.
+
+  validation_and_automation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a record against this contract, allocates ids, enforces
+      lifecycle transitions, checks that a filename matches its id, or creates
+      records. There is no CLI.
+
+  identity:
+    status: NOT IMPLEMENTED
+    detail: >
+      collected_by is an opaque identifier. No identity schema, account model,
+      or authentication exists.
+
+  source_registry:
+    status: NOT IMPLEMENTED
+    detail: >
+      source and source_locator are free-form. There is no source registry, no
+      controlled vocabulary, and no URL validation.
+
+  cross_project_resolution:
+    status: NOT IMPLEMENTED
+    detail: >
+      References are opaque within a project. Resolving a reference across
+      projects is undefined.
+
+  immutability_enforcement:
+    status: NOT IMPLEMENTED
+    detail: >
+      Immutability is a contract rule, not a technical guarantee. See
+      immutability.enforcement.
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: >
+      No migration tooling, format, or procedure exists. Existing schema
+      versions may require future migration procedures.
+
+# ---------------------------------------------------------------------------
+# OPEN ARCHITECTURAL QUESTIONS
+# ---------------------------------------------------------------------------
+#
+# Recorded, not resolved. Items marked PROPOSED — NOT APPROVED are gaps found
+# during implementation. They are NOT part of this contract and must not be
+# treated as binding or implemented.
+
+open_questions:
+
+  - id: retracted-usage
+    question: >
+      What happens to work that already relied on evidence later marked
+      RETRACTED?
+    matters_because: >
+      Retraction says the evidence should no longer be relied upon, but nothing
+      identifies what relied on it, and no notification path exists.
+    status: NOT SPECIFIED
+
+  - id: supersession-consistency-mechanism
+    question: >
+      What future mechanism keeps the two directional views of a supersession
+      consistent?
+    matters_because: >
+      A one-sided supersession is structurally valid at this stage, so a record
+      can claim to supersede another that does not point back and is still
+      marked ACTIVE.
+    status: >
+      DEFERRED BY DECISION. Consistency enforcement is a future mechanism; the
+      1.1 amendment states that one-sided references remain valid for now. No
+      reciprocal update, referential integrity, or relationship database was
+      implemented.
+
+  - id: evidence-schema-migration
+    question: >
+      What procedure migrates Evidence records written against 1.0 to 1.1?
+    matters_because: >
+      1.1 made `observation` required and added a required `title`, so a
+      conforming 1.0 record does not conform to 1.1.
+    status: >
+      NOT SPECIFIED, and NOT IMPLEMENTED — see limitations.schema_migration. No
+      1.0 records exist, so nothing is currently affected. No migration format
+      was invented.

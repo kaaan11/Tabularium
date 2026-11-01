@@ -1,0 +1,924 @@
+# Tabularium Investigation Contract
+#
+# The third formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Investigation records
+# against the definitions below.
+schema: investigation
+schema_version: "1.4"
+title: Tabularium Investigation Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Investigation contract.
+  - version: "1.1"
+    change: >
+      Approved amendment. Added the optional machine-readable
+      `conclusion_status` field, with conditional requirements tied to
+      lifecycle status. Defined the canonical hypothesis reference format
+      INV-YYYY-NNNN#Hn. Documented the CONCLUDED+INCONCLUSIVE versus
+      ABANDONED+NO_VALID_CONCLUSION distinction explicitly. No new entity
+      schema was created; hypotheses remain narrative sections.
+  - version: "1.2"
+    change: >
+      Approved amendment (B1). Reference normalization under the shared
+      reference policy now recorded in README.md.
+
+      One relationship field pointing at a formalized record type carried no
+      canonical id pattern: `decisions`. It now requires DEC ids, matching how
+      `task`, the EVD fields, and `related_investigations` were already
+      constrained.
+
+      SEMANTIC: this narrows the valid record set. A record that previously
+      carried an arbitrary string in `decisions` no longer conforms. No records
+      exist, so nothing is affected in practice.
+
+      `questions` points at a NOT-YET-FORMALIZED type and deliberately received
+      no pattern. The canonical hypothesis fragment syntax INV-YYYY-NNNN#Hn is
+      unchanged, and remains defined by this contract.
+
+      B2 clarification: project membership is positional. No `project` field
+      was added — the `project-reference` open question is resolved by that
+      ruling, not by adding a field.
+
+      No field was added or removed. No lifecycle state, transition,
+      conclusion-status rule, hypothesis rule, or numbering rule changed.
+
+  - version: "1.3"
+    change: >
+      Approved amendment (Question v1.0). Reference normalization under the
+      shared reference policy in README.md.
+
+      `questions` pointed at a NOT-YET-FORMALIZED type and carried no canonical
+      id pattern. Question is now a formalized record type
+      (question.schema.yaml), so the field requires QST ids.
+
+      SEMANTIC: this narrows the valid record set. No records exist, so nothing
+      is affected in practice.
+
+      No field was added or removed. No lifecycle state, transition,
+      conclusion-status rule, hypothesis rule, or numbering rule changed.
+
+  - version: "1.4"
+    change: >
+      Approved terminal-immutability amendment (M1-INV-01). While status is
+      OPEN or PAUSED, the Investigation remains an evolvable working record
+      under its existing semantics. Upon transition to CONCLUDED or ABANDONED,
+      every YAML/frontmatter field and every byte of Markdown body content
+      freezes permanently.
+
+      There is no post-terminal relationship-maintenance exception. New
+      Evidence, interpretation, correction, or further inquiry requires a new
+      Investigation, which may reference the terminal one through existing
+      relationship semantics.
+
+      SEMANTIC: this narrows post-terminal mutability and guarantees that an
+      Investigation or INV-YYYY-NNNN#Hn reference cannot silently acquire a
+      different historical meaning after closure. No field, lifecycle state,
+      transition, conclusion-status rule, hypothesis status, supersession,
+      correction, amendment, or history mechanism was added.
+
+description: >
+  An Investigation is a structured reasoning and inquiry process: how a problem
+  is being systematically examined using evidence. It is the third link in the
+  epistemic workflow.
+
+epistemic_workflow:
+  chain: SOURCE -> EVIDENCE -> INVESTIGATION -> CONCLUSION -> DECISION
+  what_each_answers:
+    Task: What work are we doing?
+    Evidence: What was observed, obtained, or asserted?
+    Investigation: How are we systematically examining the problem using evidence?
+    Conclusion: NOT FORMALIZED — narrative output of an Investigation for now.
+    Decision: An explicit choice by the human authority. See decision.schema.yaml.
+  note: >
+    Decision has its own contract (decision.schema.yaml). Conclusion has no
+    schema; it will be formalized later, and none was created here.
+
+# ---------------------------------------------------------------------------
+# WHAT AN INVESTIGATION IS NOT
+# ---------------------------------------------------------------------------
+
+not_this:
+
+  not_a_chat_transcript: >
+    An Investigation is not a conversation log. Dialogue is not an inquiry
+    artifact.
+
+  not_chain_of_thought: >
+    An Investigation does NOT store a model's private chain of thought. No
+    field, section, or mechanism in this contract captures internal reasoning
+    traces, and none may be added. What is recorded is the externally useful
+    artifact — the hypothesis, the action taken, the evidence produced, the
+    evaluation — not the thinking that led to it.
+
+  not_a_reasoning_dump: >
+    An Investigation is not an unrestricted narration of everything considered.
+    Records are concise and auditable.
+
+  not_unsupported_guesses: >
+    A collection of plausible-sounding candidate explanations, none of which
+    were tested, is not an Investigation. See the anti_assumption_rule.
+
+  what_it_records: >
+    Externally useful, auditable reasoning artifacts: the problem or question
+    being investigated, the evidence already known, the hypotheses, the actions
+    taken, the evidence those actions produced, the evaluation of each
+    hypothesis, and the current conclusion status.
+
+# ---------------------------------------------------------------------------
+# ANTI-ASSUMPTION RULE
+# ---------------------------------------------------------------------------
+#
+# The reason this contract exists.
+
+anti_assumption_rule:
+
+  required_shape: HYPOTHESIS -> TEST/ACTION -> EVIDENCE -> EVALUATION
+
+  rule: >
+    An unsupported assumption must never silently become a conclusion. A
+    hypothesis moves from UNTESTED only through an action that produced
+    evidence, and the evaluation must point at that evidence.
+
+  bad_example: >
+    "Hypothesis X seems correct, so we changed the code."
+    The hypothesis was never tested, no evidence was produced, and the
+    evaluation step was skipped entirely.
+
+  good_example: >
+    "Hypothesis X was tested by reproducing the failure. EVD-2026-0017 records
+    the result. The hypothesis was then evaluated."
+    A hypothesis, an action, an evidence reference, and an explicit evaluation.
+
+  purpose: >
+    This exists specifically to prevent assumption-driven debugging — acting on
+    the first plausible explanation because it sounds right.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing checks that an evaluated hypothesis references
+    evidence. This is a protocol rule.
+
+# ---------------------------------------------------------------------------
+# EVIDENCE INDEPENDENCE
+# ---------------------------------------------------------------------------
+
+evidence_independence:
+
+  references_only: >
+    An Investigation REFERENCES Evidence records by opaque id. Evidence content
+    is never copied into an Investigation, and never rewritten through one.
+    Evidence remains independent and immutable in its own right
+    (../schemas/evidence.schema.yaml).
+
+  no_source_type_upgrade: >
+    An Investigation may EVALUATE evidence — weigh it, contrast it, find it
+    weak — but it does NOT change an Evidence record's source_type. A
+    MODEL_ASSERTION is not silently upgraded into verified fact by being cited
+    in an Investigation.
+
+    If a model's claim is tested, the test result is a NEW Evidence record with
+    its own source_type. The original assertion stays what it was.
+
+  no_evidence_subtype: >
+    supporting_evidence and contradicting_evidence describe how this
+    Investigation currently reads an Evidence record. They are not a new kind
+    of Evidence, and they change nothing about the referenced record.
+
+  history_protection: >
+    Historical Evidence content must never be rewritten through an
+    Investigation. While OPEN or PAUSED, the Investigation itself is an
+    evolvable working record under this contract. Once CONCLUDED or ABANDONED,
+    the entire Investigation is an immutable historical artifact; all
+    frontmatter and all Markdown body content freeze with no exception.
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Seven fields are unconditionally required. Hypotheses, evidence, and the
+    conclusion narrative are NOT mandatory frontmatter: they live in the body,
+    or in optional references, so that opening an investigation stays cheap.
+
+  conditional_requirement: >
+    One field, `conclusion_status`, is CONDITIONALLY required: it depends on
+    the record's lifecycle status rather than being always or never required.
+    It is the only such field. See conclusion_status_rules.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO default values.
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset. Formatting convention
+    only; no clock authority or ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is the authoritative statement; this contract's only addition is the
+    canonical hypothesis fragment syntax INV-YYYY-NNNN#Hn, which it defines
+    (see hypotheses.reference_format).
+
+    In summary as it applies here: references to formalized record types use
+    the target's canonical id (TASK, EVD, INV, DEC, QST). Nothing
+    resolves a reference, a reference that does not resolve does not invalidate
+    the record, references are project-local, and cross-project resolution is
+    NOT IMPLEMENTED.
+
+  extensibility: >
+    Fields not defined in this contract must not be added silently. An
+    unrecognized field is a contract violation, not an extension point. Adding
+    a field requires a recorded decision by the human authority.
+
+  no_state_history: >
+    An Investigation record carries its current state only. No transition log,
+    no version history, and no history tooling — none was implemented.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "INV-YYYY-NNNN"
+  regex: "^INV-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the project investigation namespace
+  examples:
+    - INV-2026-0001
+    - INV-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic ID allocation is deliberately out of scope. Who
+    allocates the next number, and how collisions are prevented, is
+    NOT SPECIFIED.
+  sequence_exhaustion: >
+    NOT SPECIFIED. The behavior beyond 9999 records in one year has no defined
+    answer.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND RECORD FORMAT
+# ---------------------------------------------------------------------------
+
+storage:
+
+  location: ".ai/investigations/"
+  description: >
+    Investigation records belong in the `.ai/investigations/` directory of a
+    project's AI context. See ../templates/project/README.md.
+
+  file_naming:
+    pattern: ".ai/investigations/INV-YYYY-NNNN.md"
+    regex: "^\\.ai/investigations/INV-[0-9]{4}-[0-9]{4}\\.md$"
+    rule: >
+      The filename MUST equal the Investigation id, with the .md extension. A
+      record whose filename and id disagree is invalid; neither one silently
+      wins.
+    example: ".ai/investigations/INV-2026-0001.md"
+
+  discovery: >
+    Records are found by their filename, which is the id. Nothing indexes,
+    lists, caches, or queries them. There is NO investigation engine, and none
+    is implied by this location.
+
+record_format:
+
+  canonical: Markdown document with YAML frontmatter
+  extension: ".md"
+  example: ../templates/investigation/investigation.md
+
+  authority: >
+    Machine-authoritative metadata lives in the YAML frontmatter. The
+    structured investigation narrative lives in the Markdown body.
+
+    Every field defined in this contract lives in the frontmatter and is
+    validated against it. Where body and frontmatter appear to disagree, the
+    frontmatter governs.
+
+  body_carries_the_reasoning: >
+    Unlike Task and Evidence, the body of an Investigation is where the
+    substance lives: hypotheses, actions, evaluations, and the current
+    conclusion. These are NOT contract fields — nothing validates or parses
+    them, and they have no frontmatter equivalent to contradict.
+
+  no_second_authoritative_copy: >
+    A field that IS in the frontmatter must not have a second authoritative
+    copy in the body. The body must not restate the record's own id, its
+    status, its conclusion_status, or a timestamp as though it were the
+    record. Narrative explanation of any of them is allowed.
+
+  evidence_citations_are_not_duplication: >
+    Evidence ids DO appear in the body, and must: the anti-assumption rule
+    requires each hypothesis and action to cite the evidence it rests on.
+
+    This is not a second authoritative copy. The frontmatter lists are the
+    investigation-level roll-up of which records this inquiry draws on; the
+    body citations are per-hypothesis and per-action, at a granularity the
+    frontmatter does not express. They are different statements, not two copies
+    of one.
+
+  body_sections: >
+    The canonical example uses: "## Problem", "## Known evidence",
+    "## Hypotheses" (one subsection per hypothesis), "## Actions", and
+    "## Current conclusion". This is the shape of the example and a strong
+    convention — it is not a validated structure.
+
+# ---------------------------------------------------------------------------
+# REQUIRED FIELDS
+# ---------------------------------------------------------------------------
+
+required_fields:
+  - schema_version
+  - id
+  - title
+  - status
+  - objective
+  - created_at
+  - created_by
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  # --- identity -----------------------------------------------------------
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.4"]
+    description: >
+      The version of this contract that the record conforms to. Carried on the
+      record so a future validator can select the correct contract.
+
+  id:
+    type: string
+    required: true
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: INV-2026-0001
+
+  title:
+    type: string
+    required: true
+    description: >
+      A short, human-scannable label. One line. It is not a conclusion and does
+      not state an answer — an investigation that has not concluded cannot have
+      one.
+    example: Authentication test failures after deployment
+
+  objective:
+    type: string
+    required: true
+    description: >
+      The problem or question being investigated, stated as what is to be
+      established — not as what is suspected.
+
+      "Determine why three authentication tests began failing" is an objective.
+      "Confirm that the session middleware is at fault" is a presupposed answer
+      and is not.
+
+  # --- lifecycle ----------------------------------------------------------
+
+  status:
+    type: enum
+    required: true
+    allowed_values: [OPEN, PAUSED, CONCLUDED, ABANDONED]
+    meanings:
+      OPEN: investigation is actively being conducted
+      PAUSED: investigation is temporarily stopped but remains valid
+      CONCLUDED: investigation reached a documented conclusion
+      ABANDONED: investigation was intentionally terminated without a valid conclusion
+    description: >
+      Lifecycle position. See lifecycle below.
+
+      This is the lifecycle of the INQUIRY, not the standing of its answer.
+      The standing of the answer is `conclusion_status`, a separate field.
+
+  conclusion_status:
+    type: enum
+    required: conditional
+    allowed_values: [SUPPORTED, INCONCLUSIVE, NO_VALID_CONCLUSION]
+    meanings:
+      SUPPORTED: the investigation reached a conclusion the evidence supports
+      INCONCLUSIVE: the investigation ran but the evidence settles nothing
+      NO_VALID_CONCLUSION: no valid investigative conclusion was reached
+    description: >
+      The machine-readable standing of the investigation's ANSWER.
+
+      This is NOT a lifecycle state and is never added to the `status` enum.
+      Lifecycle status says where the INQUIRY stands; conclusion status says
+      where its ANSWER stands. The two are read together, never merged.
+
+      `status: CONCLUDED` with `conclusion_status: INCONCLUSIVE` is valid and
+      is a normal, honest outcome: the inquiry finished and the answer was "we
+      cannot tell".
+
+      See conclusion_status_rules for when the field is required.
+
+  # --- relationships ------------------------------------------------------
+  #
+  # All optional. All opaque strings.
+
+  task:
+    type: string
+    required: false
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Task this Investigation is being conducted under. An OPAQUE id.
+
+      An Investigation does NOT replace a Task. A Task answers "what work is
+      being performed"; an Investigation answers "how is the problem being
+      investigated". One Task may involve an Investigation, or none.
+
+  evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence records this Investigation draws on, regardless of which way
+      they point. Opaque references — content is never copied here.
+
+  supporting_evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence this Investigation currently reads as supporting its line of
+      inquiry. A statement about how this Investigation reads the record, not a
+      property of the record itself.
+
+      Per-hypothesis support belongs in the hypothesis section of the body;
+      this field is the investigation-level view.
+
+  contradicting_evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence this Investigation currently reads as contradicting its line of
+      inquiry. Recorded deliberately: evidence that cuts against the working
+      explanation is not dropped.
+
+  related_investigations:
+    type: list[string]
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: Other Investigations related to this one. The relation is untyped.
+
+  questions:
+    type: list[string]
+    required: false
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Question records this Investigation bears on. Question has a contract
+      (question.schema.yaml); each reference remains opaque and unresolved.
+
+  decisions:
+    type: list[string]
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Decisions this Investigation informed. Decision has a contract
+      (decision.schema.yaml); the reference is still an opaque string and
+      nothing resolves it. An Investigation never makes a decision; referencing
+      one records that it fed into a choice made by the human authority
+      (immutable principle 7).
+
+  # --- provenance ---------------------------------------------------------
+
+  created_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: When the Investigation was opened.
+    example: "2026-08-16T14:10:00Z"
+
+  updated_at:
+    type: string
+    required: false
+    format: ISO 8601 UTC
+    description: >
+      When the record was last changed. Omitted means unchanged since creation,
+      or the change was not recorded.
+
+  created_by:
+    type: string
+    required: true
+    description: >
+      Who or what opened the Investigation. An OPAQUE IDENTIFIER — no identity
+      system exists, and nothing resolves, verifies, or authenticates the
+      value.
+
+# ---------------------------------------------------------------------------
+# LIFECYCLE
+# ---------------------------------------------------------------------------
+
+lifecycle:
+
+  states: [OPEN, PAUSED, CONCLUDED, ABANDONED]
+  initial_state: OPEN
+  terminal_states: [CONCLUDED, ABANDONED]
+
+  transitions:
+    OPEN:      [PAUSED, CONCLUDED, ABANDONED]
+    PAUSED:    [OPEN, CONCLUDED, ABANDONED]
+    CONCLUDED: []
+    ABANDONED: []
+
+  invalid_transitions:
+    - CONCLUDED -> OPEN
+    - CONCLUDED -> PAUSED
+    - ABANDONED -> OPEN
+    - ABANDONED -> PAUSED
+
+  reopening: >
+    A terminal Investigation is not reopened. If the question needs further
+    work, open a new Investigation and link it through
+    related_investigations. This preserves what the original actually
+    established at the time it closed.
+
+  mutability:
+    non_terminal: >
+      While status is OPEN or PAUSED, the Investigation may evolve according
+      to the existing contract: frontmatter relationships may change,
+      hypotheses may be added or evaluated, actions and evidence citations may
+      accumulate, and the body and current conclusion may develop.
+    terminal: >
+      Immediately upon transition to CONCLUDED or ABANDONED, the Investigation
+      becomes a fully immutable historical artifact. ALL YAML/frontmatter
+      content and ALL Markdown body content freeze. This includes status,
+      conclusion_status, updated_at, every relationship, every hypothesis and
+      its identifier, text and status, every evidence citation, and every
+      action, evaluation, and conclusion narrative. No post-terminal field or
+      body edit is valid.
+    no_relationship_exception: >
+      Terminal immutability has no relationship-maintenance exception. Evidence,
+      task, related_investigations, questions, decisions, supporting_evidence,
+      contradicting_evidence, and every other relationship freeze with the
+      rest of the artifact.
+    new_information: >
+      New Evidence, a new interpretation, a correction, or further inquiry
+      after terminal state requires a NEW Investigation. The new Investigation
+      may reference the terminal one using existing relationship semantics.
+      The terminal record is never reopened, amended, corrected, superseded,
+      annotated, or otherwise mutated in place.
+
+  enforcement: >
+    NOT IMPLEMENTED. Transitions are documented, not enforced.
+
+# ---------------------------------------------------------------------------
+# HYPOTHESES
+# ---------------------------------------------------------------------------
+#
+# Hypotheses are NARRATIVE SECTIONS in the body. There is no Hypothesis schema
+# and none was created. Nothing below defines frontmatter fields.
+
+hypotheses:
+
+  representation: >
+    Each hypothesis is a structured subsection of the body, identified by a
+    simple local identifier: H1, H2, H3. The identifier is local to the
+    Investigation and is not a global id. Numbers are append-only — see
+    numbering.
+
+  numbering:
+
+    rule: >
+      H-numbers are APPEND-ONLY within an Investigation. Once assigned, a
+      number is NEVER reused.
+
+    rules:
+      - H-numbers are allocated monotonically within an Investigation.
+      - A new hypothesis receives the next unused H-number.
+      - Deleted, retired, rejected, or otherwise inactive hypotheses DO NOT
+        release their number.
+      - H-numbers are never reused.
+      - Existing hypothesis references therefore remain stable.
+      - No automatic ID allocation is implemented.
+
+    worked_example: >
+      An Investigation holds H1, H2, H3. H2 becomes obsolete and is retired.
+      The next hypothesis is H4 — NOT H2. The retired H2 keeps its number
+      permanently, and the number 2 is spent.
+
+    why: >
+      A reference is only as good as its stability. If H2 were reused, an
+      external record citing INV-YYYY-NNNN#H2 would silently come to point at
+      different content — the citation would still resolve, and it would be
+      wrong. That is a provenance and auditability failure (immutable
+      principles 3 and 5), which is why reuse is prohibited rather than
+      discouraged.
+
+    allocation: >
+      NOT IMPLEMENTED. Nothing allocates the next number, and nothing detects
+      a reused one. Whoever adds a hypothesis reads the highest number already
+      present — including retired ones — and takes the next.
+
+  retirement:
+
+    what_it_is: >
+      Retirement withdraws a hypothesis from active consideration: it was
+      malformed, duplicated another, or is no longer worth pursuing.
+
+      It is DISTINCT from a status. A rejected hypothesis was tested and ruled
+      out by evidence; a retired one is withdrawn, whatever its status was.
+
+    a_retired_hypothesis:
+      - retains its original H-number
+      - remains identifiable
+      - must not have its number reused
+      - may be marked RETIRED in the Investigation body
+      - must not silently disappear if it has been externally referenced
+
+    not_a_schema_enum: >
+      RETIRED is a LOCAL NARRATIVE DESIGNATION in the body. It is NOT a
+      hypothesis status value, is NOT added to the status vocabulary, and is
+      NOT a lifecycle state. No additional hypothesis lifecycle state was
+      invented.
+
+    deletion: >
+      A hypothesis that has been referenced from outside is not deleted. Marking
+      it retired keeps the reference meaningful — a reader following the
+      citation finds the hypothesis and learns it was withdrawn, which is a
+      different and better outcome than finding nothing, or finding something
+      else.
+
+  reference_format:
+    pattern: "INV-YYYY-NNNN#Hn"
+    regex: "^INV-[0-9]{4}-[0-9]{4}#H[0-9]+$"
+    examples:
+      - INV-2026-0001#H1
+      - INV-2026-0001#H4
+    stability: >
+      A reference is stable for the life of the Investigation because the
+      number it names is never reassigned. What a reference points at may be
+      retired while the Investigation is OPEN or PAUSED; it never becomes a
+      different hypothesis. Once the Investigation is CONCLUDED or ABANDONED,
+      both the H-number and the complete substantive meaning of the hypothesis
+      are immutable, so an external reference cannot silently change meaning.
+    purpose: >
+      The canonical way to refer to a specific hypothesis from outside its
+      Investigation — a future Decision or Report can cite one without a global
+      Hypothesis entity existing.
+
+      The reference is composed: the Investigation id, a '#', and the local
+      identifier. The hypothesis itself still has NO global id; it is addressed
+      through its Investigation.
+
+    resolution: >
+      NOT IMPLEMENTED. Nothing parses, resolves, or verifies these references.
+      A reference to a hypothesis that does not exist is not detected.
+
+  a_hypothesis_is: >
+    A candidate explanation being tested. Writing one down commits to testing
+    it, not to believing it.
+
+  conceptual_shape:
+    id: H1, H2, H3 — local to this Investigation
+    statement: the candidate explanation, in one line
+    status: one of the hypothesis status values below
+    supporting_evidence: Evidence ids that support it
+    contradicting_evidence: Evidence ids that cut against it
+    tests: the actions taken to test it
+
+  status_values:
+    UNTESTED: no action has yet tested this hypothesis
+    SUPPORTED: evidence is consistent with it
+    WEAKENED: evidence counts against it, but it is not ruled out
+    REJECTED: evidence rules it out
+    INCONCLUSIVE: it was tested and the result settled nothing
+
+  status_is_not_truth: >
+    Hypothesis status does NOT map to truth.
+
+    SUPPORTED does not mean proven true — it means the evidence gathered so far
+    is consistent with it. REJECTED is the strongest statement available and
+    still rests on the evidence to hand. Nothing in this contract licenses
+    reading a status as a fact about the world.
+
+  no_hypothesis_schema: >
+    NOT IMPLEMENTED, deliberately. Hypotheses are not records and have no ids
+    of their own. They are addressable from outside only through the composed
+    reference format above, which is a way of pointing into an Investigation —
+    not a global Hypothesis entity.
+
+# ---------------------------------------------------------------------------
+# ACTIONS
+# ---------------------------------------------------------------------------
+#
+# Actions are NARRATIVE entries in the body. There is no Action schema and none
+# was created.
+
+actions:
+
+  representation: >
+    Actions are recorded concisely in the body, each stating what was done,
+    which hypothesis it tested, and which Evidence it produced where
+    applicable.
+
+  examples:
+    - run test
+    - inspect code
+    - inspect log
+    - search documentation
+    - compare implementations
+    - reproduce failure
+    - perform experiment
+
+  evidence_link: >
+    An action that produced a result should reference the resulting Evidence
+    record. An action with no evidence is still recordable — a search that
+    found nothing is worth knowing — but it cannot carry a hypothesis out of
+    UNTESTED on its own.
+
+  no_action_schema: >
+    NOT IMPLEMENTED, deliberately. Actions are not records and have no ids.
+
+# ---------------------------------------------------------------------------
+# CONCLUSION
+# ---------------------------------------------------------------------------
+
+conclusion:
+
+  two_parts: >
+    A conclusion has a machine-readable part and a narrative part:
+      - `conclusion_status` in the frontmatter — MACHINE-AUTHORITATIVE
+        classification
+      - "## Current conclusion" in the body — the detailed narrative
+
+  body_narrative: >
+    The body section carries the reasoning: what was concluded, on what
+    evidence, what it does not establish, and what remains open. Narrative
+    explanation is expected and encouraged.
+
+  body_must_not_duplicate_the_value: >
+    The body must NOT restate the exact `conclusion_status` value as though it
+    were an authoritative field — no "Conclusion status: SUPPORTED" line. The
+    frontmatter holds the classification; the body explains it. Describing the
+    standing of the answer in prose is fine; presenting a second copy of the
+    metadata value is not.
+
+  no_conclusion_schema: >
+    NOT IMPLEMENTED, deliberately. Conclusion is not an entity. It is a field
+    plus a body section on the Investigation. Conclusion will be formalized
+    later; no Conclusion schema was created.
+
+  a_conclusion_is_not_a_decision: >
+    A conclusion is what the investigation found. A decision is a choice made
+    by the human authority. An Investigation never makes one (immutable
+    principle 7).
+
+# ---------------------------------------------------------------------------
+# CONCLUSION STATUS RULES
+# ---------------------------------------------------------------------------
+
+conclusion_status_rules:
+
+  by_lifecycle_status:
+    OPEN:
+      requirement: MAY BE ABSENT
+      note: >
+        An inquiry in progress need not have an answer yet. A value may be
+        present and provisional.
+    PAUSED:
+      requirement: MAY BE ABSENT
+      note: >
+        A paused inquiry remains valid; it may or may not have reached a
+        provisional answer before stopping.
+    CONCLUDED:
+      requirement: MUST BE PRESENT
+      allowed: [SUPPORTED, INCONCLUSIVE, NO_VALID_CONCLUSION]
+      note: >
+        A concluded investigation must state where its answer stands. Any of
+        the three values is permitted — including INCONCLUSIVE, which is a
+        legitimate outcome, not a failure to finish.
+    ABANDONED:
+      requirement: MUST BE NO_VALID_CONCLUSION
+      note: >
+        An abandoned inquiry was terminated before reaching a valid
+        investigative conclusion, so no other value can honestly apply.
+
+  worked_example: >
+    status: CONCLUDED with conclusion_status: INCONCLUSIVE is VALID.
+
+  abandoned_vs_inconclusive:
+
+    concluded_inconclusive: >
+      CONCLUDED + INCONCLUSIVE means the investigation was COMPLETED, but the
+      available evidence did not support a sufficiently strong conclusion. The
+      work was done; the evidence was not enough.
+
+    abandoned_no_valid_conclusion: >
+      ABANDONED + NO_VALID_CONCLUSION means the investigation was
+      INTENTIONALLY TERMINATED before reaching a valid investigative
+      conclusion. The work stopped.
+
+    not_equivalent: >
+      These are NOT equivalent and must never be treated, counted, or reported
+      as the same outcome. One is a finished inquiry with a weak answer; the
+      other is an unfinished inquiry with no answer. Collapsing them
+      misrepresents what happened.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing checks that a CONCLUDED record carries a
+    conclusion_status, or that an ABANDONED record carries
+    NO_VALID_CONCLUSION.
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+
+limitations:
+
+  investigation_engine:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing conducts, drives, schedules, or reasons through an Investigation.
+      There is no engine, no CLI, and no automation. A record is a file written
+      by hand.
+
+  validation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a record against this contract, allocates ids, enforces
+      lifecycle transitions, checks that a filename matches its id, or verifies
+      that an evaluated hypothesis cites evidence.
+
+  chain_of_thought_storage:
+    status: NOT IMPLEMENTED — AND OUT OF SCOPE
+    detail: >
+      No mechanism captures private model reasoning, and none may be added. See
+      not_this.not_chain_of_thought.
+
+  state_and_version_history:
+    status: NOT IMPLEMENTED
+    detail: >
+      A record carries its current state only. No transition log and no version
+      history tooling. Reconstructing how an Investigation developed depends on
+      Git history of the record file.
+
+  identity:
+    status: NOT IMPLEMENTED
+    detail: created_by is an opaque identifier. No identity model exists.
+
+  referential_integrity:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing verifies that a referenced Task, Evidence, Question, Decision, or
+      Investigation exists. Cross-project resolution is undefined.
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: >
+      No migration tooling, format, or procedure exists. Existing schema
+      versions may require future migration procedures.
+
+# ---------------------------------------------------------------------------
+# OPEN ARCHITECTURAL QUESTIONS
+# ---------------------------------------------------------------------------
+#
+# Recorded, not resolved. Items marked PROPOSED — NOT APPROVED are gaps found
+# during implementation. They are NOT part of this contract and must not be
+# treated as binding or implemented.
+#
+# Resolved and therefore removed from this list:
+#   conclusion-status-location  - conclusion_status was added (1.1)
+#   hypothesis-addressability   - INV-YYYY-NNNN#Hn was defined (1.1)
+#   abandoned-vs-inconclusive   - the distinction was documented (1.1)
+#   hypothesis-renumbering      - H-numbers are append-only and never reused
+#                                 (clarification; no version change)
+#   project-reference           - resolved by the B2 ruling: project membership
+#                                 is POSITIONAL, so no `project` field is
+#                                 needed here and none was added (1.2)
+
+open_questions:
+
+  - id: hypothesis-reference-integrity
+    question: >
+      What verifies that an INV-YYYY-NNNN#Hn reference points at a hypothesis
+      that exists?
+    matters_because: >
+      The reference format is now canonical, so external records will start
+      using it. Hypotheses are body sections with no registry, so a reference
+      to H7 in an investigation that has three hypotheses is undetectable.
+    status: >
+      NOT SPECIFIED. Reference resolution is NOT IMPLEMENTED, by decision.
+
+  - id: investigation-schema-migration
+    question: >
+      What procedure migrates Investigation records written against 1.0 to 1.1?
+    matters_because: >
+      1.1 makes conclusion_status mandatory for CONCLUDED and ABANDONED
+      records, so a conforming 1.0 record in either state does not conform to
+      1.1.
+    status: >
+      NOT SPECIFIED, and NOT IMPLEMENTED — see limitations.schema_migration. No
+      1.0 records exist, so nothing is currently affected.

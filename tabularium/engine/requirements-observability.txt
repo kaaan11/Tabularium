@@ -1,0 +1,46 @@
+# Optional observability export dependencies for the M5.2 OpenTelemetry
+# adapter (tabularium/engine/observability/otel.py).
+#
+# SCOPE: the OTel EXPORT path ONLY. Nothing else in this repository imports
+# OpenTelemetry, and a test asserts that the context loader, projection,
+# skills, workers, runtime, execution pipeline, persistence, continuation, and
+# tool boundary all import cleanly without it. The M5.1 trace model itself has
+# no dependency at all: in-memory and JSONL collection work with an empty
+# environment.
+#
+# Tabularium owns observability SEMANTICS; OpenTelemetry is transport. Removing these
+# packages disables export and changes nothing about execution, approval, tool
+# authorization, persistence, or project truth.
+#
+# Declared, not installed globally by this repository.
+#   python -m pip install --user -r tabularium/engine/requirements-observability.txt
+
+# Measured footprint of the two packages below, resolved into a clean venv:
+#   opentelemetry-api  opentelemetry-sdk  opentelemetry-semantic-conventions
+#   typing_extensions
+#   4 packages, 18 MB.
+#
+# No exporter package is declared. Validation uses the SDK's own in-memory
+# span exporter, so the test suite needs no network and no collector. An OTLP
+# exporter, a collector, or a backend is a later, explicit decision.
+opentelemetry-api>=1.44,<2
+opentelemetry-sdk>=1.44,<2
+
+# --- M5.3 Langfuse (OPTIONAL, declared in pyproject.toml observability extra)
+#
+# Langfuse 4.x ingests OTLP/HTTP at /api/public/otel/v1/traces and carries its
+# domain model in `langfuse.*` OTel SPAN ATTRIBUTES. The M5.3 adapter therefore
+# produces those attributes on the M5.2 spans and needs NO Langfuse package at
+# runtime — a test asserts it holds no module-level langfuse import.
+#
+# Declared in the `observability` extra in `pyproject.toml` so CI actively executes
+# SDK attribute drift assertions (test_langfuse_export.py:85).
+# Measured footprint: langfuse 4.14.4 resolves to 25 packages / 52 MB, including
+# an OTLP HTTP exporter, httpx, requests, protobuf, and pydantic.
+#
+# Shipping spans to Langfuse is an explicit, credential-bearing act: build an
+# OTLP exporter pointed at `langfuse_otel.otlp_endpoint(host)` with
+# `langfuse_otel.otlp_headers(public_key, secret_key)`. Nothing is sent by
+# default, no credential is read from the environment, and no key belongs in
+# this repository.
+langfuse>=4.14,<5

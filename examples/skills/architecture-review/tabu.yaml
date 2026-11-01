@@ -1,0 +1,35 @@
+# Tabularium governance sidecar. NOT part of the Agent Skills standard.
+#
+# Every value is an UPPER BOUND on what the control plane already permits,
+# except approval_required, which is a LOWER bound. This file grants nothing:
+# removing it removes privileges, it never adds any.
+
+sidecar_version: "1.0"          # file shape only; no governance meaning
+
+# Projected payload sections this skill may receive. A review needs the rules,
+# the work, what blocks it, and what was already decided — nothing else.
+allowed_context_classes:
+  - required
+  - constraints
+  - task_narrative
+  - blocking_questions
+  - decisions
+  - continuation
+
+allowed_worker_categories:
+  - CLI_CODING
+  - API_MODEL
+
+allowed_tool_classes:
+  - NONE
+
+# Reviewing is read-only and produces no change, so this skill adds no
+# approval requirement. It cannot lower a control-plane requirement.
+approval_required: false
+
+output_contract: REVIEW
+
+# Maximum persistence this skill may REQUEST. PROPOSE is not write authority:
+# every proposal still passes the nine-condition persistence gate, including
+# explicit human authorization.
+persistence: PROPOSE

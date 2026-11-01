@@ -1,0 +1,614 @@
+# Tabularium Question Contract
+#
+# The fifth formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Question records against
+# the definitions below.
+schema: question
+schema_version: "1.0"
+title: Tabularium Question Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Question contract.
+
+description: >
+  A Question records an explicit unresolved information request that matters to
+  project work and must be recorded rather than silently answered by
+  assumption.
+
+  It is information-governance support. A Question's answer is INFORMATION.
+
+# ---------------------------------------------------------------------------
+# WHAT A QUESTION IS NOT
+# ---------------------------------------------------------------------------
+
+not_this:
+  not_a_decision: >
+    A Question is not a Decision and never becomes one. Selecting a course of
+    action is decision.schema.yaml's business.
+  not_approval: >
+    Answering a Question is not approving anything. Approval is an explicit act
+    by the human authority, recorded on a Task or a Decision.
+  not_evidence: >
+    An answer does not become Evidence. If the reliability of an answer
+    matters, record Evidence separately — evidence.schema.yaml already
+    distinguishes USER_ASSERTION from MODEL_ASSERTION — and reference it.
+  not_an_execution_instruction: >
+    An answer authorizes nothing and triggers nothing.
+  not_a_transcript: >
+    Not a chat transcript, chain-of-thought, brainstorm log, or discussion
+    thread. No mechanism here stores any of those, and none may be added.
+  not_a_note_or_todo: >
+    Not a generic note and not a TODO list. A Question is raised because the
+    answer would materially change the work.
+  not_a_vote: >
+    No voting, tallying, quorum, or majority mechanism exists.
+
+# ---------------------------------------------------------------------------
+# ANSWERING ESTABLISHES NO AUTHORITY
+# ---------------------------------------------------------------------------
+
+answer_establishes_no_authority:
+
+  what_ANSWERED_means: >
+    ANSWERED means exactly one thing: an explicit answer has been recorded for
+    this Question.
+
+  what_it_does_not_mean:
+    - human approval occurred
+    - the answer is a Decision
+    - the answer is authoritative truth
+    - execution is authorized
+    - the reliability of any Evidence changed
+    - the answer automatically became Evidence
+
+  wording: >
+    An answer is never described as "approved" and never as "accepted" in a
+    governance sense. Those words carry authority this contract does not grant.
+
+  no_record_mutation: >
+    Answering a Question mutates NOTHING else. It does not change a Task's
+    status, unblock work, alter an Investigation, create a Decision, or create
+    Evidence. If a blocked Task should resume, that is a separate, explicit act
+    on the Task.
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Eight fields are unconditionally required. Answer provenance is NOT among
+    them — a Question that has just been raised has no answer.
+
+  conditional_requirement: >
+    Three fields, `answer`, `answered_by`, and `answered_at`, are
+    CONDITIONALLY required: whether they must be present depends on `status`.
+    They are the only such fields. See answer_provenance_rules.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO default values.
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset. Formatting convention
+    only; no clock authority or ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is the authoritative statement; this contract adds no exceptions to
+    it — no relationship field here implies reciprocity, authority, approval,
+    ownership, or a lifecycle transition in the referenced record.
+
+    In summary as it applies here: references to formalized record types use
+    the target's canonical id (TASK, INV, DEC, EVD, QST). Nothing resolves a
+    reference, a reference that does not resolve does not invalidate the
+    record, references are project-local, and cross-project resolution is
+    NOT IMPLEMENTED.
+
+  no_state_history: >
+    A Question record carries its current state only. No transition log, no
+    answer history, and no version history tooling.
+
+  phase_dependent_mutability: >
+    What may change depends on the record's PHASE, not only on which field it
+    is. See immutability.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "QST-YYYY-NNNN"
+  regex: "^QST-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the project question namespace
+  examples:
+    - QST-2026-0001
+    - QST-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic ID allocation is deliberately out of scope. Who
+    allocates the next number, and how collisions are prevented, is
+    NOT SPECIFIED.
+  sequence_exhaustion: >
+    NOT SPECIFIED. The behavior beyond 9999 records in one year has no defined
+    answer.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND RECORD FORMAT
+# ---------------------------------------------------------------------------
+
+storage:
+
+  location: ".ai/questions/"
+  description: >
+    Question records belong in the `.ai/questions/` directory of a project's AI
+    context. See ../templates/project/README.md.
+
+  file_naming:
+    pattern: ".ai/questions/QST-YYYY-NNNN.md"
+    regex: "^\\.ai/questions/QST-[0-9]{4}-[0-9]{4}\\.md$"
+    rule: >
+      The filename MUST equal the Question id, with the .md extension. A record
+      whose filename and id disagree is invalid; neither one silently wins.
+    example: ".ai/questions/QST-2026-0001.md"
+
+  project_scope: >
+    Project membership is POSITIONAL — a Question belongs to the project whose
+    `.ai/` directory contains it. There is deliberately NO `project` field. See
+    README.md ("Project scoping").
+
+  discovery: >
+    Records are found by their filename, which is the id. Nothing indexes,
+    lists, caches, or queries them.
+
+record_format:
+
+  canonical: Markdown document with YAML frontmatter
+  extension: ".md"
+  example: ../templates/question/question.md
+
+  authority: >
+    Machine-authoritative metadata lives in the YAML frontmatter. Narrative and
+    context live in the Markdown body.
+
+    Every field defined in this contract lives in the frontmatter and is
+    validated against it. Where body and frontmatter appear to disagree, the
+    frontmatter governs.
+
+  no_second_authoritative_copy: >
+    A field that IS in the frontmatter must not have a second authoritative
+    copy in the body. The body must not restate the id, the status, the impact
+    value, a timestamp, or the answer as though it were the record.
+
+  body_sections: >
+    The canonical example uses "## Context" and "## Answer". Both are
+    narrative. This is the shape of the example, not a validated structure —
+    no section is required, and nothing parses the body.
+
+  body_is_not_a_transcript: >
+    The body carries concise context, not a discussion thread and not
+    chain-of-thought.
+
+# ---------------------------------------------------------------------------
+# REQUIRED FIELDS
+# ---------------------------------------------------------------------------
+
+required_fields:
+  - schema_version
+  - id
+  - title
+  - question
+  - status
+  - impact
+  - created_at
+  - created_by
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  # --- identity -----------------------------------------------------------
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.0"]
+    description: >
+      The version of this contract that the record conforms to. Carried on the
+      record so a future validator can select the correct contract.
+
+  id:
+    type: string
+    required: true
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: QST-2026-0001
+
+  title:
+    type: string
+    required: true
+    description: >
+      A short, human-scannable label. One line. It is a handle for the
+      Question, not the Question itself — see `question`.
+    example: Retention window for non-production logs
+
+  question:
+    type: string
+    required: true
+    description: >
+      The actual unresolved information request, stated as a question.
+
+      This is what was asked. It is FROZEN FROM CREATION — a different question
+      is a different record, not an edit to this one.
+
+      "How long should non-production logs be retained?" is a question. "Retain
+      logs for 30 days" is an answer and does not belong here.
+
+  # --- classification -----------------------------------------------------
+
+  status:
+    type: enum
+    required: true
+    allowed_values: [OPEN, ANSWERED, WITHDRAWN]
+    meanings:
+      OPEN: The Question has been raised; no answer is recorded.
+      ANSWERED: An explicit answer is recorded. Terminal.
+      WITHDRAWN: Closed without an answer — no longer needed, or overtaken by events. Terminal.
+    description: >
+      Lifecycle position. See lifecycle.
+
+      WITHDRAWN must never be represented, counted, or reported as answered. A
+      withdrawn Question produced no answer.
+
+  impact:
+    type: enum
+    required: true
+    allowed_values: [BLOCKING, NON_BLOCKING]
+    meanings:
+      BLOCKING: The related work cannot correctly proceed without an answer.
+      NON_BLOCKING: The related work may proceed, but the answer would still materially affect the project work.
+    description: >
+      How the absence of an answer bears on the work.
+
+      `impact` is NOT Task priority, NOT risk, NOT severity, and NOT urgency.
+      It is a statement about whether work can proceed, not about how much the
+      work matters. Do not read it as a priority scale, and do not add one.
+
+      NON_BLOCKING does not mean unimportant: a Question is raised at all only
+      because the answer would materially change the work.
+
+  # --- answer provenance --------------------------------------------------
+  #
+  # One conditional unit of three. See answer_provenance_rules.
+
+  answer:
+    type: string
+    required: conditional
+    description: >
+      The recorded answer to the question.
+
+      CONDITIONALLY REQUIRED — mandatory when status is ANSWERED, and MUST be
+      absent for OPEN and WITHDRAWN.
+
+      Recording an answer establishes no authority — see
+      answer_establishes_no_authority. It is not a Decision, not an approval,
+      and not Evidence.
+
+  answered_by:
+    type: string
+    required: conditional
+    description: >
+      Who supplied or recorded the answer. An OPAQUE ACTOR REFERENCE — no
+      identity system exists, and nothing resolves, verifies, or authenticates
+      the value.
+
+      CONDITIONALLY REQUIRED — mandatory when status is ANSWERED, and MUST be
+      absent for OPEN and WITHDRAWN.
+
+      This records who answered. It does NOT record that they were authorized
+      to, and answering carries no authority.
+
+  answered_at:
+    type: string
+    required: conditional
+    format: ISO 8601 UTC
+    description: >
+      When the answer was recorded. CONDITIONALLY REQUIRED — mandatory when
+      status is ANSWERED, and MUST be absent for OPEN and WITHDRAWN.
+    example: "2026-08-18T11:00:00Z"
+
+  # --- relationships ------------------------------------------------------
+  #
+  # All optional. All opaque. None implies reciprocity or authority.
+
+  task:
+    type: string
+    required: false
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Task this Question bears on. Referencing it does not change the
+      Task's status, and answering the Question does not unblock it.
+
+  investigation:
+    type: string
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Investigation this Question arose in or bears on. Answering does not
+      alter the Investigation.
+
+  decision:
+    type: string
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Decision this Question bears on. A Question may precede a Decision;
+      answering it neither creates nor approves one.
+
+      The reference is one-way. Decision has no `questions` field, and none was
+      added — reciprocity is not implied by a reference (README.md rule 8).
+
+  evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence bearing on this Question, including anything that supports the
+      answer. Referencing Evidence neither copies it, modifies it, nor changes
+      its reliability.
+
+  related_questions:
+    type: list[string]
+    required: false
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Other Questions related to this one. The relation is untyped.
+
+      This is the one relationship field that stays mutable after a terminal
+      transition — a later-discovered relationship does not rewrite what was
+      originally asked or answered. See immutability.
+
+  # --- provenance ---------------------------------------------------------
+
+  created_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: When the Question was raised.
+    example: "2026-08-18T09:30:00Z"
+
+  updated_at:
+    type: string
+    required: false
+    format: ISO 8601 UTC
+    description: >
+      When the record was last changed. Omitted means unchanged since creation,
+      or the change was not recorded.
+
+  created_by:
+    type: string
+    required: true
+    description: >
+      Who or what raised the Question. An OPAQUE ACTOR REFERENCE. No identity
+      system exists.
+
+# ---------------------------------------------------------------------------
+# ANSWER PROVENANCE RULES
+# ---------------------------------------------------------------------------
+
+answer_provenance_rules:
+
+  fields: [answer, answered_by, answered_at]
+
+  keyed_on: status
+
+  by_status:
+    OPEN:
+      requirement: MUST BE ABSENT
+      note: Nothing has been answered. Answer provenance on an open Question is a false claim.
+    ANSWERED:
+      requirement: MUST BE PRESENT
+      note: >
+        An answered Question states what the answer was, who supplied it, and
+        when. All three, or the record does not say what it claims to say.
+    WITHDRAWN:
+      requirement: MUST BE ABSENT
+      note: >
+        A withdrawn Question was closed WITHOUT an answer. Carrying answer
+        provenance would make it indistinguishable from an answered one.
+
+  one_unit: >
+    The three fields form ONE conditional provenance unit and move together.
+    ANY partial combination is invalid — an answer with no author, an author
+    with no answer, an answer with no time, and every other subset.
+
+  withdrawal_provenance: >
+    NOT REQUIRED in v1.0. There is deliberately no `withdrawn_by`,
+    `withdrawn_at`, or `withdrawal_reason`. The status alone distinguishes a
+    withdrawn Question from an answered one, and no repository-wide invariant
+    requires more.
+
+  what_this_does_not_establish: >
+    These fields record THAT an answer was given and BY WHOM it was claimed.
+    They do not establish that the answerer was authorized, that the answer is
+    correct, or that anything is approved. See
+    answer_establishes_no_authority.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing checks that an ANSWERED record carries answer
+    provenance, or that an OPEN or WITHDRAWN one lacks it.
+
+# ---------------------------------------------------------------------------
+# LIFECYCLE
+# ---------------------------------------------------------------------------
+
+lifecycle:
+
+  states: [OPEN, ANSWERED, WITHDRAWN]
+  initial_state: OPEN
+  terminal_states: [ANSWERED, WITHDRAWN]
+
+  transitions:
+    OPEN:      [ANSWERED, WITHDRAWN]
+    ANSWERED:  []
+    WITHDRAWN: []
+
+  invalid_transitions:
+    - ANSWERED -> OPEN
+    - WITHDRAWN -> OPEN
+    - ANSWERED -> WITHDRAWN
+    - WITHDRAWN -> ANSWERED
+
+  no_reopen: >
+    A terminal Question is NOT reopened in v1.0. If the matter is unresolved
+    again, or the recorded answer turns out to be wrong, raise a NEW Question
+    and link it through `related_questions`. This preserves what was asked and
+    what was answered at the time.
+
+  answered_and_withdrawn_are_not_interchangeable: >
+    ANSWERED produced an answer; WITHDRAWN did not. Neither converts into the
+    other, and a withdrawn Question is never reported as answered.
+
+  enforcement: >
+    NOT IMPLEMENTED. Transitions are documented, not enforced.
+
+# ---------------------------------------------------------------------------
+# IMMUTABILITY
+# ---------------------------------------------------------------------------
+
+immutability:
+
+  principle: >
+    Mutability is PHASE-DEPENDENT. What may change depends on whether the
+    Question is still open or has reached a terminal state.
+
+  frozen_from_creation:
+    fields: [id, question, created_at, created_by]
+    detail: >
+      What was asked, when, and by whom does not change — not even while the
+      Question is OPEN. A different question is a different record.
+
+  phase_while_OPEN:
+    fields: [title, impact, task, investigation, decision, evidence,
+             related_questions, updated_at]
+    detail: >
+      While OPEN, the framing and the relationships may be refined: a clearer
+      label, a corrected impact assessment, newly discovered related records.
+      The question text itself stays fixed.
+
+  phase_once_terminal:
+    applies_to: [ANSWERED, WITHDRAWN]
+    fields: [related_questions, updated_at]
+    frozen: [id, title, question, impact, task, investigation, decision,
+             evidence, created_at, created_by]
+    also_frozen_when_ANSWERED: [answer, answered_by, answered_at]
+    detail: >
+      Once a Question is answered or withdrawn, its historical meaning is
+      frozen: what was asked, how it was labelled, whether it blocked work,
+      what it bore on, and — if answered — what the answer was, who gave it,
+      and when.
+
+      Only `related_questions` and `updated_at` remain mutable.
+      `related_questions` stays open because a later-discovered relationship
+      between Questions does not rewrite what was originally asked or answered.
+
+  no_mechanism: >
+    No hashes, signatures, event sourcing, revision history, or answer history.
+    This is a contract rule.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing prevents a frozen field from being edited.
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+
+limitations:
+
+  id_allocation:
+    status: NOT IMPLEMENTED
+    detail: Manual. Nothing allocates the next number or detects a collision.
+
+  validation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a record, enforces transitions, checks that a filename
+      matches its id, or verifies the answer provenance rules.
+
+  workflow_automation:
+    status: NOT IMPLEMENTED
+    detail: >
+      No automatic escalation, no automatic Task unblocking, no automatic Task
+      or Investigation status mutation, no automatic Decision creation, and no
+      automatic Evidence creation. Answering a Question changes no other
+      record.
+
+  identity_and_authority:
+    status: NOT IMPLEMENTED
+    detail: >
+      `created_by` and `answered_by` are opaque actor references. No identity
+      schema, authority registry, permission model, or delegation exists, and a
+      Question establishes no authority.
+
+  supersession:
+    status: NOT IMPLEMENTED
+    detail: >
+      Question defines no supersession semantics. Under the contract-specific
+      supersession ruling (README.md), a contract has none unless it defines
+      them, and Question deliberately does not.
+
+  state_and_answer_history:
+    status: NOT IMPLEMENTED
+    detail: >
+      A record carries its current state only. There is no state history, no
+      answer history, and no reopen.
+
+  cross_project_references:
+    status: NOT IMPLEMENTED
+    detail: References are project-local; cross-project resolution is undefined.
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: No migration tooling, format, or procedure exists.
+
+# ---------------------------------------------------------------------------
+# OPEN ARCHITECTURAL QUESTIONS
+# ---------------------------------------------------------------------------
+#
+# Recorded, not resolved.
+
+open_questions:
+
+  - id: withdrawal-provenance
+    question: >
+      Should a withdrawn Question record who withdrew it and when?
+    matters_because: >
+      An answered Question carries full provenance; a withdrawn one carries
+      none, so nothing records who decided it was no longer needed. Whether
+      that asymmetry matters depends on whether withdrawal is ever
+      consequential.
+    status: >
+      NOT SPECIFIED — deliberately deferred in v1.0. The status alone
+      distinguishes withdrawn from answered, and no existing invariant requires
+      more. PROPOSED — NOT APPROVED: `withdrawn_by` / `withdrawn_at`. Not
+      implemented.
+
+  - id: blocking-criteria
+    question: >
+      What criteria make a Question BLOCKING rather than NON_BLOCKING?
+    matters_because: >
+      `impact` is required, so every record must choose, but the boundary is a
+      judgement call with no stated test. Two people could classify the same
+      Question differently.
+    status: >
+      NOT SPECIFIED. The enum is now fixed; the criteria are not.

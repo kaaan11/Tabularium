@@ -1,0 +1,17 @@
+# Runtime dependencies for the M3.6 API worker (tabularium/engine/workers/api).
+#
+# SCOPE: this file is the API-worker path ONLY. It is deliberately separate
+# from tabularium/engine/requirements.txt, which is the frozen M2 Context Loader
+# dependency declaration and remains PyYAML alone. Nothing under
+# tabularium/engine/context_loader/, tabularium/engine/projection/, tabularium/engine/skills/, or
+# spikes/cli_worker/ imports anything declared here, and the API worker
+# imports LiteLLM lazily so that an absent install disables only that one
+# worker rather than the repository.
+#
+# Declared, not installed globally by this repository.
+#   python -m pip install --user -r tabularium/engine/requirements-api.txt
+
+# Provider transport for APIWorker. LiteLLM normalizes provider API
+# differences so that Tabularium needs no per-provider adapter. The Python SDK is
+# used directly; the LiteLLM Proxy/Gateway is NOT used.
+litellm>=1.60,<2

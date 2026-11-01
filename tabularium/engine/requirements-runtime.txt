@@ -1,0 +1,25 @@
+# Runtime dependencies for the M4.1 governed execution runtime
+# (tabularium/engine/runtime).
+#
+# SCOPE: the runtime path ONLY. This file is deliberately separate from
+# tabularium/engine/requirements.txt, which is the frozen M2 Context Loader dependency
+# declaration and remains PyYAML alone. Nothing under tabularium/engine/context_loader/,
+# tabularium/engine/projection/, tabularium/engine/skills/, or tabularium/engine/workers/ imports anything
+# declared here, and the runtime imports LangGraph lazily so that an absent
+# install disables only the runtime rather than the repository.
+#
+# Declared, not installed globally by this repository.
+#   python -m pip install --user -r tabularium/engine/requirements-runtime.txt
+
+# Workflow scheduling, suspend/resume, and checkpoint mechanics. Selected in
+# M3.7 by measured bake-off against Microsoft Agent Framework.
+#
+# The lower bound is the version validated by the M3.7 bake-off and by the
+# M4.1 tests. 1.2.11 carries a known Command(resume=None) defect that the
+# runtime guards against before the framework is ever reached; the guard is
+# harmless on fixed versions and its regression test documents the behavior.
+langgraph>=1.2.11,<2
+
+# Durable local checkpointing to a caller-supplied SQLite file. No server and
+# no external service: durability is a local file the operator controls.
+langgraph-checkpoint-sqlite>=3.1,<4

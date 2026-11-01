@@ -1,0 +1,1135 @@
+# Tabularium Task Contract
+#
+# The first formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Task objects against
+# the definitions below.
+schema: task
+schema_version: "1.10"
+title: Tabularium Task Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Task contract.
+  - version: "1.1"
+    change: >
+      Approved amendment. Fixed the `type` vocabulary; added the CANCELLED
+      state; added approval provenance (`approved_by`, `approved_at`); defined
+      `.ai/tasks/` as the storage location; defined Markdown with YAML
+      frontmatter as the canonical stored record format. No state-history
+      fields were added — state history is a separate mechanism to be designed
+      later, and a Task represents only its current state.
+  - version: "1.2"
+    change: >
+      DOCUMENTATION / REFERENCE CONSISTENCY AMENDMENT ONLY.
+
+      Corrected statements that had become false once the Evidence contract was
+      defined: the `evidence` field no longer claims that the Evidence schema is
+      not implemented, and the `references` convention no longer claims that no
+      referenced schema exists.
+
+      NO behavioral change. No field was added, removed, or renamed; no enum,
+      state, transition, storage rule, approval rule, or scope rule was
+      touched. A record conforming to 1.1 conforms to 1.2 with only its
+      `schema_version` value updated.
+  - version: "1.3"
+    change: >
+      DOCUMENTATION / REFERENCE CONSISTENCY AMENDMENT ONLY.
+
+      Corrected statements that had become false once the Investigation
+      contract was defined: the `investigations` field no longer claims that
+      the Investigation schema is not implemented, and the `references`
+      convention now names Investigation among the contracts that exist.
+
+      BEHAVIORALLY IDENTICAL TO 1.2. No field was added, removed, or renamed.
+      No required field, type enum, state, transition, storage rule, approval
+      rule, scope rule, relationship, or provenance field was touched. A record
+      conforming to 1.2 conforms to 1.3 with only its `schema_version` value
+      updated.
+  - version: "1.4"
+    change: >
+      Approved amendment (DEC11-02). Behavioral APPROVAL PROVENANCE amendment,
+      aligning Task with the semantics established by Decision 1.2.
+
+      1.3 permitted `approval_status: APPROVED` with no `approved_by` and no
+      `approved_at`, and permitted those fields to appear on a Task that was
+      NOT_REQUIRED, PENDING, or REJECTED. Human approval was therefore
+      representable without attributable provenance.
+
+      1.4 makes the two fields a CONDITIONAL PROVENANCE PAIR keyed to
+      `approval_status`: both MUST be present when APPROVED, both MUST be
+      absent otherwise, and one without the other is invalid in either
+      direction.
+
+      NO other change. No field added, removed, or renamed. The
+      approval_required / approval_status distinction, the type enum, the ten
+      states, the transition table, the storage rule, the scope rules, the
+      relationships, and the record provenance fields are all untouched.
+      `approved_by` remains an opaque actor reference — no identity schema,
+      authority registry, permission system, role hierarchy, delegation model,
+      or machine-readable authority system was introduced.
+  - version: "1.5"
+    change: >
+      Approved amendment (B1). Reference normalization under the shared
+      reference policy now recorded in README.md.
+
+      Three relationship fields pointing at formalized record types carried no
+      canonical id pattern: `decisions`, `investigations`, and `evidence`. Each
+      now requires the target contract's canonical id — DEC, INV, and EVD
+      respectively — matching how `parent_task` and `related_tasks` already
+      constrained Task references.
+
+      SEMANTIC: this narrows the valid record set. A Task that previously
+      carried an arbitrary string in one of those three fields no longer
+      conforms. No records exist, so nothing is affected in practice.
+
+      Fields pointing at NOT-YET-FORMALIZED types — `questions`, `handoffs`,
+      `reports`, `context_items`, `evaluations` — deliberately received NO
+      pattern. No id format was invented for Question, Handoff, or Report.
+
+      B2 clarification, documentation-only: project membership is positional,
+      and the optional `project` field is non-authoritative annotation. No
+      field was added or removed. No lifecycle, approval, or scope rule
+      changed.
+  - version: "1.6"
+    change: >
+      Approved amendment (S2). Resolves the previously ambiguous re-approval
+      provenance behavior.
+
+      `approved_by` and `approved_at` are declared to represent the CURRENT
+      EFFECTIVE APPROVAL STATE PROVENANCE — not an approval history, not an
+      event log, not a cumulative approver record, and not an audit trail
+      across lifecycle cycles. When a Task returns to PENDING the current
+      effective approval ceases to exist and the pair is absent; a later
+      re-approval establishes its own new pair.
+
+      The immutability rule was narrowed accordingly: the pair must not be
+      rewritten WHILE IT DESCRIBES THE SAME effective approval event, which is
+      not the same as claiming it can never change. 1.5 wording could be read
+      as forbidding the clearing that the status invariant already requires.
+
+      SEMANTIC: 1.5 did not unambiguously establish current-effective
+      semantics, so this is recorded as a semantic amendment rather than a
+      clarification.
+
+      Historical approval-event retention remains NOT IMPLEMENTED. No
+      approval_history, approval_events, event sourcing, state-history array,
+      audit-log schema, or approval ledger was added, and version control is
+      explicitly NOT declared the normative approval-history mechanism.
+
+      No field was added or removed. No lifecycle transition, approval_status
+      value, approval_required semantics, or by_approval_status requirement
+      changed.
+
+  - version: "1.7"
+    change: >
+      Approved amendment (Question v1.0). Reference normalization under the
+      shared reference policy in README.md.
+
+      `questions` pointed at a NOT-YET-FORMALIZED type and carried no canonical
+      id pattern. Question is now a formalized record type
+      (question.schema.yaml), so the field requires QST ids.
+
+      SEMANTIC: this narrows the valid record set. A Task that previously
+      carried an arbitrary string in `questions` no longer conforms. No records
+      exist, so nothing is affected in practice.
+
+      No field was added or removed. No lifecycle, approval, scope, or
+      provenance rule changed.
+
+  - version: "1.8"
+    change: >
+      Approved amendment (Handoff v1.0). Reference normalization under the
+      shared reference policy in README.md.
+
+      `handoffs` pointed at a NOT-YET-FORMALIZED type and carried no canonical
+      id pattern. Handoff is now a formalized record type
+      (handoff.schema.yaml), so the field requires HND ids.
+
+      SEMANTIC: this narrows the valid record set. A Task that previously
+      carried an arbitrary string in `handoffs` no longer conforms. No records
+      exist, so nothing is affected in practice.
+
+      No field was added or removed. No lifecycle, approval, scope, or
+      provenance rule changed. A Handoff referencing a Task does not assign it
+      or change its status — that boundary belongs to handoff.schema.yaml.
+
+  - version: "1.9"
+    change: >
+      Approved amendment (Report v1.0). Reference normalization under the
+      shared reference policy in README.md.
+
+      `reports` and `report` pointed at a NOT-YET-FORMALIZED type and carried
+      no canonical id pattern. Report is now a formalized record type
+      (report.schema.yaml), so both fields require RPT ids.
+
+      SEMANTIC: this narrows the valid record set. A Task that previously
+      carried an arbitrary string in either Report reference field no longer
+      conforms. No records exist, so nothing is affected in practice.
+
+      No field was added or removed. The plural `reports` remains the optional
+      collection of associated Reports and singular `report` remains the
+      optional closing Report reference. No lifecycle, approval, scope, or
+      provenance rule changed. A Report referencing a Task does not complete
+      it or change its status — that boundary belongs to report.schema.yaml.
+
+  - version: "1.10"
+    change: >
+      Approved archival-outcome amendment (M1-TASK-01). Added exactly one
+      field, `archived_outcome`, with the closed enum COMPLETED / CANCELLED.
+
+      The field is conditionally required: it MUST be present when status is
+      ARCHIVED and MUST be absent in every other state. Its value is bound to
+      the source terminal state of the archival transition: COMPLETED ->
+      ARCHIVED records COMPLETED; CANCELLED -> ARCHIVED records CANCELLED.
+      Once ARCHIVED, the value is immutable.
+
+      SEMANTIC: this narrows the valid record set and preserves the distinction
+      between completed and cancelled Tasks after their current status becomes
+      ARCHIVED. It does not represent current status, general state history,
+      result details, approval outcome, Report outcome, cancellation reason,
+      or archive reason.
+
+      No lifecycle state or transition changed. No result or Report field
+      became required. No previous-status, state-history, archive-history,
+      timestamp, reason, event-sourcing, or workflow mechanism was added.
+
+description: >
+  A Task represents a concrete unit of work requested by the human authority,
+  or generated as a controlled follow-up from an existing Task. TASK is the
+  most specific layer of the Tabularium hierarchy
+  (CONSTITUTION > CORE PROTOCOLS > POLICIES > DOMAIN > PROJECT > TASK).
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Unconditionally required fields are deliberately few. A simple Task (for
+    example, fixing a typo) is expected to carry only those. Optional fields
+    exist so that complex or risk-bearing work can be expressed, not so that
+    every Task must express it.
+
+  conditional_requirement: >
+    Three fields are CONDITIONALLY required. `approved_by` and `approved_at`
+    form a pair keyed to `approval_status`; `archived_outcome` is independently
+    keyed to `status`. See approval_provenance_rules and
+    archived_outcome_rules.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO default values.
+    Missing information must not be fabricated; UNKNOWN is preferable to
+    invented information.
+
+  explicit_unknown: >
+    Where it is useful to state that something was considered and is not known,
+    the literal string UNKNOWN may be used as the value of an optional
+    string-typed field. UNKNOWN is never valid for an enumerated field; omit
+    the field instead.
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset, e.g.
+    "2026-08-16T14:05:00Z". This is a formatting convention only; no time
+    source, clock authority, or ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is the authoritative statement; this contract adds no exceptions to
+    it.
+
+    In summary as it applies here: references to formalized record types use
+    the target's canonical id (TASK, EVD, INV, DEC, QST, HND, RPT); references
+    to not-yet-formalized types — context_items, evaluations — remain
+    unconstrained strings with no invented id format.
+    Nothing resolves a reference, a reference that does not resolve does not
+    invalidate the record, references are project-local, and a reference
+    implies no reciprocity, authority, approval, ownership, or lifecycle
+    transition.
+
+  extensibility: >
+    Fields not defined in this contract must not be added silently. An
+    unrecognized field is a contract violation, not an extension point. Adding
+    a field requires a recorded decision by the human authority.
+
+  current_state_only: >
+    A Task object represents its CURRENT lifecycle state and carries no general
+    state history or transition log. The sole narrow exception is
+    `archived_outcome`, which preserves only whether an ARCHIVED Task entered
+    from COMPLETED or CANCELLED. It is not a history mechanism and records no
+    other previous state or transition. General state history remains a
+    separate mechanism that has not been designed.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND RECORD FORMAT
+# ---------------------------------------------------------------------------
+
+storage:
+
+  location: ".ai/tasks/"
+  description: >
+    Task objects belong in the `.ai/tasks/` directory of a project's AI
+    context. See ../templates/project/README.md for the full project structure.
+
+  file_naming:
+    pattern: ".ai/tasks/TASK-YYYY-NNNN.md"
+    regex: "^\\.ai/tasks/TASK-[0-9]{4}-[0-9]{4}\\.md$"
+    rule: >
+      The filename MUST equal the Task id, with the .md extension. A record
+      whose filename and id disagree is invalid; neither one silently wins.
+    example: ".ai/tasks/TASK-2026-0001.md"
+    consequence: >
+      Because the filename carries the id, a Task is locatable from its id
+      without an index, and two records cannot claim the same id inside one
+      project.
+
+  discovery: >
+    Records are found by their filename, which is the id. Nothing indexes,
+    lists, caches, or resolves them, and no cross-project resolution is
+    defined. There is no task-generation mechanism and none is implied by this
+    location.
+
+record_format:
+
+  canonical: Markdown document with YAML frontmatter
+  extension: ".md"
+  example: ../templates/task/task.md
+
+  description: >
+    The canonical stored form of a Task is a Markdown document whose YAML
+    frontmatter carries the contract fields, followed by a human-readable body.
+
+  authority: >
+    Machine-authoritative Task metadata lives in the YAML frontmatter.
+    Human- and model-readable narrative lives in the Markdown body.
+
+    Every field defined in this contract lives in the frontmatter and is
+    validated against it. The body defines no fields and carries no authority.
+    Where body and frontmatter appear to disagree, the frontmatter governs.
+
+  no_second_authoritative_copy: >
+    An authoritative field must not have a second authoritative copy in the
+    body. This applies to id, type, title, status, priority, risk, the approval
+    fields, the relationship fields, and the provenance fields.
+
+    Concretely: the body must not restate an id, an enumerated value, a
+    timestamp, or a reference as though it were the record. A reader must never
+    have to decide which of two copies is current.
+
+    The body MAY explain these concepts narratively — why the risk is what it
+    is, what the approval covers, what is being investigated — as long as it
+    does not present a competing value.
+
+  note: >
+    This contract file remains YAML and remains the formal contract. The
+    Markdown format is how Task records are stored, not a replacement for the
+    contract.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "TASK-YYYY-NNNN"
+  regex: "^TASK-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the repository task namespace
+  examples:
+    - TASK-2026-0001
+    - TASK-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic ID generation is deliberately out of scope. The
+    contract defines the format only. Who allocates the next number, and how
+    collisions are prevented, is NOT SPECIFIED.
+  sequence_exhaustion: >
+    NOT SPECIFIED. The behavior when more than 9999 tasks exist in one year has
+    no defined answer.
+
+# ---------------------------------------------------------------------------
+# REQUIRED FIELDS
+# ---------------------------------------------------------------------------
+
+required_fields:
+  - schema_version
+  - id
+  - title
+  - objective
+  - status
+  - created_at
+  - created_by
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  # --- identity and classification ---------------------------------------
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.10"]
+    description: >
+      The version of this contract that the Task object conforms to. Carried on
+      the object so that a future validator can select the correct contract.
+      Migration of objects written against an earlier version is NOT SPECIFIED.
+      1.2 and 1.3 are documentation-only amendments, so a 1.1 object needs no
+      change other than this value.
+
+  id:
+    type: string
+    required: true
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: TASK-2026-0001
+
+  type:
+    type: enum
+    required: false
+    allowed_values:
+      - GENERAL
+      - RESEARCH
+      - IMPLEMENTATION
+      - DEBUGGING
+      - REVIEW
+      - ANALYSIS
+    description: >
+      What KIND OF WORK the Task represents.
+
+      Type does NOT describe the domain, the model, the skill, or a capability.
+      Those are outside this contract and must not be encoded here.
+
+      The vocabulary is closed. No value outside this list is valid, and values
+      must not be added without a recorded decision by the human authority.
+
+  title:
+    type: string
+    required: true
+    description: Short human-readable name. One line.
+    example: Investigate authentication failure
+
+  objective:
+    type: string
+    required: true
+    description: >
+      What outcome is wanted, stated as an outcome and not as an
+      implementation. The objective is WHAT, not HOW. Approval of an objective
+      is not approval of any particular implementation of it — see the
+      scope_boundary section below.
+
+  # --- classification -----------------------------------------------------
+
+  priority:
+    type: enum
+    required: false
+    allowed_values: [LOW, NORMAL, HIGH, URGENT]
+    description: >
+      Importance and urgency. Priority is NOT technical risk and must never be
+      merged with the risk field.
+
+  risk:
+    type: enum
+    required: false
+    allowed_values: [LOW, MEDIUM, HIGH, CRITICAL]
+    description: >
+      The potential impact of an incorrect action while performing this Task.
+      Risk is NOT priority. A LOW priority task may be CRITICAL risk, and the
+      reverse.
+
+  uncertainty_level:
+    type: enum
+    required: false
+    allowed_values: [LOW, MEDIUM, HIGH]
+    description: >
+      How well-grounded the current understanding of the Task is. Deliberately
+      coarse. No scoring system, weighting, or computation is defined, and none
+      should be inferred. Omit the field when it adds nothing.
+
+  status:
+    type: enum
+    required: true
+    allowed_values:
+      - INBOX
+      - ANALYZING
+      - PLANNED
+      - WAITING_APPROVAL
+      - IN_PROGRESS
+      - BLOCKED
+      - REVIEW
+      - COMPLETED
+      - CANCELLED
+      - ARCHIVED
+    description: >
+      Current lifecycle state. State meanings and valid transitions are defined
+      in state_machine below.
+
+      CANCELLED means the Task was intentionally terminated without reaching
+      COMPLETED. It is NOT equivalent to COMPLETED and must never be counted,
+      reported, or treated as completed work.
+
+      Note: REVIEW appears both as a status and as a `type` value. They are
+      unrelated — one is a lifecycle state, the other is a kind of work.
+
+  archived_outcome:
+    type: enum
+    required: conditional
+    allowed_values: [COMPLETED, CANCELLED]
+    description: >
+      The terminal Task outcome from which this Task entered ARCHIVED.
+      CONDITIONALLY REQUIRED — see archived_outcome_rules. It MUST be present
+      when `status` is ARCHIVED and MUST be absent for every other status.
+
+      COMPLETED -> ARCHIVED requires COMPLETED. CANCELLED -> ARCHIVED requires
+      CANCELLED. Once ARCHIVED, the value is frozen and must never be removed
+      or changed.
+
+      This is not current lifecycle status, general status history, Task result
+      detail, approval result, a success/failure score, Report outcome,
+      cancellation reason, or archive reason.
+
+  # --- scope: four distinct concepts --------------------------------------
+  #
+  # objective        what outcome is wanted            (required, above)
+  # plan             how the agent proposes to do it   (optional)
+  # approved_scope   what the human actually approved  (optional)
+  # actual_changes   what was actually done            (optional)
+  #
+  # These are NOT equivalent and must not be collapsed into one another.
+
+  plan:
+    type: string
+    required: false
+    description: >
+      The proposed approach. A plan is a proposal, not an approval and not a
+      record of what happened. Recording a plan does not authorize executing
+      it.
+
+  approved_scope:
+    type: object
+    required: false
+    description: >
+      The boundary of what the human authority actually approved. Present only
+      when an approval has been given. Every subfield is optional; an omitted
+      subfield means that dimension of the scope was not bounded explicitly,
+      NOT that it is unbounded.
+    fields:
+
+      approved_files:
+        type: list[string]
+        required: false
+        description: >
+          Paths the approval covers. Interpretation of patterns, globs, or
+          directory-level entries is NOT SPECIFIED.
+
+      approved_operations:
+        type: list[string]
+        required: false
+        description: >
+          Classes of operation the approval covers. The vocabulary of operation
+          names is NOT SPECIFIED and must not be invented here.
+
+      approved_risk:
+        type: enum
+        required: false
+        allowed_values: [LOW, MEDIUM, HIGH, CRITICAL]
+        description: >
+          The highest risk level the approval covers. If the work turns out to
+          carry higher risk than this, the existing approval does not cover it.
+
+      approved_plan:
+        type: string
+        required: false
+        description: >
+          The plan as approved, or a reference to it. This may differ from the
+          plan field, which holds the proposal. Where both exist and differ,
+          the approved_plan is what was authorized.
+
+  actual_changes:
+    type: list[string]
+    required: false
+    description: >
+      What was actually changed while performing the Task. Recorded so that
+      actual work can be compared against approved_scope. This field is a
+      record, not an authorization.
+
+  # --- relationships ------------------------------------------------------
+  #
+  # All optional. All symbolic. Formalized targets use their canonical ids;
+  # context_items and evaluations remain unformalized.
+
+  project:
+    type: string
+    required: false
+    description: >
+      Optional NON-AUTHORITATIVE project locator / annotation.
+
+      Project membership is POSITIONAL: this Task belongs to the project whose
+      `.ai/` directory contains it. This field does NOT determine membership
+      and MUST NOT override it — where the two disagree, the location governs.
+
+      The Project schema is NOT IMPLEMENTED and the project identifier format
+      is NOT SPECIFIED. See README.md ("Project scoping").
+
+  parent_task:
+    type: string
+    required: false
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Task this one was generated from, when it is a controlled follow-up.
+      Whether cycles are permitted, and how depth is limited, is NOT SPECIFIED.
+
+  related_tasks:
+    type: list[string]
+    required: false
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: Other Tasks related to this one. The relation is untyped.
+
+  context_items:
+    type: list[string]
+    required: false
+    description: Symbolic references to context. Context schema NOT IMPLEMENTED.
+
+  decisions:
+    type: list[string]
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic references to Decision records. Decision has a contract
+      (decision.schema.yaml); the reference is still an opaque string and
+      nothing resolves it.
+
+  investigations:
+    type: list[string]
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic references to Investigation records. Investigation has a
+      contract (investigation.schema.yaml); the reference is still an opaque
+      string and nothing resolves it.
+
+  questions:
+    type: list[string]
+    required: false
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic references to Question records. Question has a contract
+      (question.schema.yaml); each reference remains opaque and unresolved.
+
+  evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic references to Evidence records. Evidence has a contract
+      (evidence.schema.yaml); the reference is still an opaque string and
+      nothing resolves it.
+
+  handoffs:
+    type: list[string]
+    required: false
+    pattern: "^HND-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic references to Handoff records. Handoff has a contract
+      (handoff.schema.yaml); each reference remains opaque and unresolved.
+
+  reports:
+    type: list[string]
+    required: false
+    pattern: "^RPT-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic references to associated Reports. Report has a contract
+      (report.schema.yaml); each reference remains opaque and unresolved.
+
+  evaluations:
+    type: list[string]
+    required: false
+    description: >
+      Symbolic references to Evaluations. Schema NOT IMPLEMENTED and no
+      evaluation data exists.
+
+  # --- model assignment ---------------------------------------------------
+
+  assigned_model:
+    type: string
+    required: false
+    description: >
+      An opaque identifier for the model assigned to this Task. This field
+      records an assignment; it does not make one.
+
+      This contract defines NO capability score, NO routing logic, and NO
+      preference between models. Model selection and a model registry are
+      unimplemented. No model is the default.
+
+  # --- approval -----------------------------------------------------------
+
+  approval_required:
+    type: boolean
+    required: false
+    description: >
+      Whether this Task requires explicit human approval before work proceeds.
+      The criteria that make approval required are NOT SPECIFIED. Omitted means
+      not recorded, not false.
+
+  approval_status:
+    type: enum
+    required: false
+    allowed_values: [NOT_REQUIRED, PENDING, APPROVED, REJECTED]
+    description: >
+      Current approval state. APPROVED records that the human authority
+      approved this Task; it never records agent self-approval, which does not
+      exist (immutable principle 7). No approval automation and no approval
+      interface exist.
+
+  approved_by:
+    type: string
+    required: conditional
+    description: >
+      Who granted the approval. Only the human authority can approve, so this
+      never names an agent.
+
+      CONDITIONALLY REQUIRED — see approval_provenance_rules. Mandatory when
+      `approval_status` is APPROVED; must be absent for NOT_REQUIRED, PENDING,
+      and REJECTED.
+
+      This is an OPAQUE ACTOR REFERENCE. No identity system exists (see
+      created_by), and none is defined here — the value stays opaque until the
+      future identity model is designed. Nothing resolves, verifies, or
+      authenticates it.
+
+      This is approval provenance carried on the Task itself — no separate
+      Approval entity exists and none was created.
+
+  approved_at:
+    type: string
+    required: conditional
+    format: ISO 8601 UTC
+    description: >
+      When the approval was granted. CONDITIONALLY REQUIRED — see
+      approval_provenance_rules. Mandatory when `approval_status` is APPROVED;
+      must be absent for NOT_REQUIRED, PENDING, and REJECTED.
+    example: "2026-08-16T11:30:00Z"
+
+  # --- output and completion ---------------------------------------------
+
+  result:
+    type: string
+    required: false
+    description: >
+      Short statement of the outcome. Not a report. The full account of what
+      happened belongs in a Report, referenced from the reports field.
+
+  tests:
+    type: list[string]
+    required: false
+    description: >
+      References to, or descriptions of, the verification performed. No test
+      framework, runner, or result format is assumed or defined.
+
+  report:
+    type: string
+    required: false
+    pattern: "^RPT-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Symbolic reference to the single Report that closes this Task. The Report
+      structure is not duplicated inside the Task. Recording this reference is
+      separate from creating the Report and neither act changes Task status.
+
+  # --- provenance ---------------------------------------------------------
+
+  created_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: When the Task was created.
+    example: "2026-08-16T14:05:00Z"
+
+  updated_at:
+    type: string
+    required: false
+    format: ISO 8601 UTC
+    description: >
+      When the Task was last changed. Omitted means the Task has not been
+      changed since creation, or the change was not recorded.
+
+  created_by:
+    type: enum
+    required: true
+    allowed_values: [USER, AGENT, SYSTEM]
+    description: >
+      What originated the Task. USER is the human authority. AGENT is an AI
+      agent producing a controlled follow-up. SYSTEM is the Tabularium itself.
+      This is a coarse origin marker, not an identity system. Individual
+      identities, accounts, and authentication are NOT SPECIFIED.
+
+# ---------------------------------------------------------------------------
+# APPROVAL PROVENANCE RULES
+# ---------------------------------------------------------------------------
+#
+# DEC11-02. approved_by and approved_at are CONDITIONALLY REQUIRED: whether
+# they must be present depends on `approval_status`. They are the only such
+# fields in this contract.
+
+approval_provenance_rules:
+
+  fields: [approved_by, approved_at]
+
+  keyed_on: approval_status
+
+  by_approval_status:
+    APPROVED:
+      requirement: MUST BE PRESENT
+      note: >
+        An approved Task states who approved it and when. Human approval must
+        not be representable without attributable provenance — a decision
+        without provenance is incomplete (immutable principle 3), and an
+        unattributed approval is indistinguishable from an agent approving its
+        own recommendation (immutable principle 7).
+    NOT_REQUIRED:
+      requirement: MUST BE ABSENT
+      note: No approval was sought, so there is no approval event to attribute.
+    PENDING:
+      requirement: MUST BE ABSENT
+      note: Approval has not been granted. Provenance on a pending Task is a false claim.
+    REJECTED:
+      requirement: MUST BE ABSENT
+      note: The Task was not approved.
+
+  pair_semantics: >
+    The two fields are ONE PROVENANCE PAIR and move together. A Task carrying
+    one without the other is invalid in either direction: an approver with no
+    time, or a time with no approver, is incomplete provenance.
+
+  semantics: >
+    `approved_by` and `approved_at` represent the CURRENT EFFECTIVE APPROVAL
+    STATE PROVENANCE — who granted the approval that is in force right now, and
+    when.
+
+    They do NOT represent:
+      - a complete approval history
+      - a historical approval-event log
+      - a cumulative record of everyone who has ever approved this Task
+      - an immutable audit trail across lifecycle cycles
+
+    When `approval_status` is APPROVED, the pair describes THAT approval — the
+    one currently in force. When the Task returns to PENDING, the current
+    effective approval no longer exists, so the pair MUST be absent, exactly as
+    by_approval_status already requires.
+
+    The fact that an earlier approval once existed is NOT retained in the Task
+    record.
+
+  re_approval: >
+    If a Task later moves from PENDING back to APPROVED, the newly effective
+    approval receives ITS OWN `approved_by` and `approved_at` under the same
+    invariant. The pair describes the new current effective approval.
+
+    How earlier approval events are retained is NOT DEFINED — see
+    historical_retention. No approval sequence number, ordinal, or counter
+    exists, and the lifecycle transitions are unchanged.
+
+  historical_retention:
+    status: NOT IMPLEMENTED
+    detail: >
+      Historical approval-event retention is NOT IMPLEMENTED. This contract has
+      no `approval_history`, no `approval_events`, no event sourcing, no
+      state-history array, no audit-log schema, and no append-only approval
+      ledger. None may be added here.
+
+      Version control may exist operationally, but it is NOT the normative or
+      authoritative approval-history mechanism, and nothing in this contract
+      treats it as proof that a prior approval occurred.
+
+  immutability: >
+    While `approved_by` and `approved_at` describe the SAME effective approval
+    event, they MUST NOT be rewritten — not to a different actor, and not to a
+    different time. That is the honesty rule, and it is narrow.
+
+    It is NOT a claim that the pair can never change. A later lifecycle
+    transition that removes the current effective approval clears them,
+    according to by_approval_status; a later new approval establishes a new
+    pair. What is forbidden is editing the pair while it still stands for the
+    approval currently in force.
+
+    No event sourcing, signature, hash, verification, or execution machinery
+    exists or is implied.
+
+  what_this_does_not_establish: >
+    These fields record THAT approval occurred and BY WHOM it was claimed. They
+    do not establish that the approver was authorized. Authority rests with the
+    human authority and is not represented in this contract.
+    Nothing resolves, verifies, or authenticates the identifier.
+
+  relationship_to_approval_required: >
+    `approval_required` and `approval_status` remain DISTINCT and unchanged.
+    `approval_required` records whether approval is needed; `approval_status`
+    records where approval stands. These rules key on `approval_status` only,
+    and no new combination of the two was introduced.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing checks that an APPROVED Task carries provenance,
+    that an unapproved one lacks it, or that a recorded approval was never
+    rewritten.
+
+# ---------------------------------------------------------------------------
+# SCOPE BOUNDARY
+# ---------------------------------------------------------------------------
+
+scope_boundary:
+
+  principle: >
+    User approval of an objective does not automatically constitute approval of
+    every possible implementation.
+
+  rationale: >
+    Objective, plan, approved scope, and actual changes are four distinct
+    things. Collapsing them is how uncontrolled scope expansion happens
+    (immutable principle 10).
+
+  intended_future_check: >
+    NOT IMPLEMENTED. The contract is shaped so that a future implementation can
+    check actual_changes against approved_scope. Nothing performs that check
+    today; the fields are records, not controls.
+
+  approval_is_bounded_by_scope: >
+    Where approved_scope is present, the approval extends no further than what
+    it describes. Work outside it requires a new approval, regardless of how
+    closely related it appears.
+
+# ---------------------------------------------------------------------------
+# STATE MACHINE
+# ---------------------------------------------------------------------------
+#
+# No executable state enforcement exists.
+
+state_machine:
+
+  initial_state: INBOX
+  terminal_state: ARCHIVED
+
+  transitions:
+    INBOX:            [ANALYZING, CANCELLED]
+    ANALYZING:        [PLANNED, WAITING_APPROVAL, BLOCKED, CANCELLED]
+    PLANNED:          [IN_PROGRESS, WAITING_APPROVAL, BLOCKED, CANCELLED]
+    WAITING_APPROVAL: [IN_PROGRESS, PLANNED, ANALYZING, BLOCKED, CANCELLED]
+    IN_PROGRESS:      [REVIEW, WAITING_APPROVAL, BLOCKED, CANCELLED]
+    BLOCKED:          [ANALYZING, PLANNED, WAITING_APPROVAL, IN_PROGRESS, REVIEW, CANCELLED]
+    REVIEW:           [COMPLETED, IN_PROGRESS, WAITING_APPROVAL, BLOCKED, CANCELLED]
+    COMPLETED:        [ARCHIVED]
+    CANCELLED:        [ARCHIVED]
+    ARCHIVED:         []
+
+  cancellation: >
+    CANCELLED is entered from any non-terminal state, because a Task can be
+    intentionally terminated at any point before it completes. It is NOT
+    reachable from COMPLETED — work that finished did not get cancelled — and
+    not from ARCHIVED, which is terminal.
+
+    CANCELLED is not equivalent to COMPLETED. Both lead to ARCHIVED, and that
+    is the only thing they share. Their distinction remains machine-readable
+    after archival through `archived_outcome`.
+
+  archival_transition_binding:
+    COMPLETED_to_ARCHIVED:
+      required_archived_outcome: COMPLETED
+    CANCELLED_to_ARCHIVED:
+      required_archived_outcome: CANCELLED
+    invalid:
+      - COMPLETED -> ARCHIVED with archived_outcome CANCELLED
+      - CANCELLED -> ARCHIVED with archived_outcome COMPLETED
+      - ARCHIVED with archived_outcome absent
+      - any non-ARCHIVED status with archived_outcome present
+
+  enforcement: >
+    NOT IMPLEMENTED. Transitions are documented, not enforced. Nothing prevents
+    an invalid transition from being written into a file today.
+
+# ---------------------------------------------------------------------------
+# ARCHIVED OUTCOME RULES
+# ---------------------------------------------------------------------------
+
+archived_outcome_rules:
+
+  field: archived_outcome
+  keyed_on: status
+
+  by_status:
+    ARCHIVED:
+      requirement: MUST BE PRESENT
+      allowed_values: [COMPLETED, CANCELLED]
+    INBOX: { requirement: MUST BE ABSENT }
+    ANALYZING: { requirement: MUST BE ABSENT }
+    PLANNED: { requirement: MUST BE ABSENT }
+    WAITING_APPROVAL: { requirement: MUST BE ABSENT }
+    IN_PROGRESS: { requirement: MUST BE ABSENT }
+    BLOCKED: { requirement: MUST BE ABSENT }
+    REVIEW: { requirement: MUST BE ABSENT }
+    COMPLETED: { requirement: MUST BE ABSENT }
+    CANCELLED: { requirement: MUST BE ABSENT }
+
+  transition_binding: >
+    The value MUST equal the terminal source state of the archival transition.
+    COMPLETED -> ARCHIVED requires `archived_outcome: COMPLETED`; CANCELLED ->
+    ARCHIVED requires `archived_outcome: CANCELLED`. The inverse combinations
+    are invalid.
+
+  immutability: >
+    Once status is ARCHIVED, `archived_outcome` is frozen. It MUST NOT be
+    removed, changed, or rewritten between COMPLETED and CANCELLED. ARCHIVED is
+    terminal and has no post-archive mutation exception.
+
+  minimal_archival: >
+    `archived_outcome` alone preserves the completed-versus-cancelled
+    distinction. `result`, `report`, and `reports` remain optional and are not
+    required for archival.
+
+  not_history: >
+    This field records exactly one fact: which terminal Task state immediately
+    preceded ARCHIVED. It is not `previous_status`, a state history, an archive
+    history, event sourcing, a transition log, or workflow machinery.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing automatically validates presence, absence,
+    transition correspondence, or immutability.
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+#
+# Known and accepted limitations of this contract as implemented. These are
+# statements of fact about what does not exist, not proposals.
+
+limitations:
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: >
+      Task schema migration is currently NOT IMPLEMENTED. There is no migration
+      tooling, no migration format, and no defined procedure.
+
+      Existing schema versions may require future migration procedures. Version
+      1.1 narrowed `type` from free-form to a closed vocabulary and changed the
+      accepted `schema_version`, so an object written against 1.0 may not
+      conform to 1.1. No 1.0 objects exist, so nothing is currently affected —
+      but a later contract change could affect records that do exist.
+    not_invented: >
+      No migration format has been designed here, deliberately.
+
+  identity:
+    status: NOT IMPLEMENTED
+    detail: >
+      `created_by` is a coarse origin marker (USER / AGENT / SYSTEM) and
+      `approved_by` is an opaque identifier. No identity schema, account model,
+      or authentication exists. Provenance is only as reliable as what was
+      written into the record.
+
+  state_history:
+    status: NOT IMPLEMENTED
+    detail: >
+      A Task carries its current lifecycle state and no transition log or
+      general state history. `archived_outcome` is the sole narrow terminal
+      outcome marker; it records only whether ARCHIVED was entered from
+      COMPLETED or CANCELLED. Reconstructing any other prior state or transition
+      depends entirely on the Git history of the record file.
+
+  validation_and_automation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a Task against this contract, allocates ids, enforces
+      transitions, or creates records. Every rule here is documentation.
+
+# ---------------------------------------------------------------------------
+# OPEN ARCHITECTURAL QUESTIONS
+# ---------------------------------------------------------------------------
+#
+# Recorded, not resolved. Items marked PROPOSED — NOT APPROVED are gaps found
+# during implementation. They are NOT part of this contract and must not be
+# treated as binding or implemented.
+#
+# Resolved by the 1.1 amendment and therefore removed from this list:
+#   task-type-vocabulary            - the type vocabulary is now closed
+#   terminal-path-for-abandoned-tasks - CANCELLED was added
+#   approval-provenance             - approved_by and approved_at were added
+#   task-storage-location           - .ai/tasks/ was defined
+#
+# Resolved by the 1.1 finalization and therefore removed from this list:
+#   task-record-file-naming         - the filename is the id: TASK-YYYY-NNNN.md
+#   markdown-body-authority         - frontmatter is authoritative; the body
+#                                     holds no second authoritative copy
+#
+# Resolved by the 1.6 amendment (S2) and therefore removed from this list:
+#   re-approval-provenance          - approved_by/approved_at are CURRENT
+#                                     EFFECTIVE approval provenance, not a
+#                                     history. Returning to PENDING clears
+#                                     them; re-approval establishes a new pair.
+#                                     Historical retention stays NOT
+#                                     IMPLEMENTED — see
+#                                     approval_provenance_rules.
+open_questions:
+
+  - id: blocked-return-state
+    question: >
+      When a BLOCKED Task resumes, how is the state it should return to known?
+    matters_because: >
+      BLOCKED is reachable from six states and the transition table permits
+      returning to any active state. Nothing in the object records where the
+      Task came from, so the correct return state is not recoverable from it.
+    status: >
+      DEFERRED BY DECISION. The 1.1 amendment states that a Task represents its
+      current lifecycle state and that general state history will be designed
+      later as a separate mechanism. No blocked-return or general history field
+      was added; `archived_outcome` applies only after archival and cannot
+      recover a BLOCKED Task's prior active state.
+
+  - id: state-change-auditability
+    question: How is the history of state changes preserved?
+    matters_because: >
+      status holds only the current value. Immutable principle 5 requires that
+      what happened remain reconstructable. At present that depends entirely on
+      Git history of the Task record.
+    status: >
+      DEFERRED BY DECISION to the separate state-history mechanism, which has
+      not been designed.
+
+  - id: approval-required-status-combinations
+    question: >
+      Are all combinations of `approval_required` and `approval_status` legal?
+    matters_because: >
+      Both fields are optional and independent, so logically contradictory
+      pairs are structurally expressible — for example
+      `approval_required: true` with `approval_status: NOT_REQUIRED`, or
+      `approval_required: false` with `approval_status: APPROVED`. Nothing
+      states which combinations are valid.
+    status: >
+      NOT SPECIFIED, and unrelated to DEC11-02, which keys only on
+      `approval_status` and introduced no new combination. Recorded rather than
+      silently resolved. PROPOSED — NOT APPROVED: a compatibility table between
+      the two fields. Not implemented.
+
+  - id: approver-identity
+    question: How is the value of approved_by constrained?
+    matters_because: >
+      approved_by is an uncontrolled string because no identity system exists.
+      Approval provenance is only as reliable as the name written into it.
+    status: >
+      NOT SPECIFIED. The 1.0 contract deliberately deferred an identity system
+      and the 1.1 amendment did not introduce one.
+
+  - id: schema-migration
+    question: >
+      What procedure migrates Task records when a contract version narrows or
+      changes?
+    matters_because: >
+      1.1 narrowed `type` and changed the accepted schema_version, so a
+      conforming 1.0 object may not conform to 1.1. A future change could
+      affect records that actually exist.
+    status: >
+      NOT SPECIFIED, and NOT IMPLEMENTED — see limitations.schema_migration.
+      No migration format was invented.

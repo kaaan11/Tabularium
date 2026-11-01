@@ -1,0 +1,519 @@
+# Tabularium Handoff Contract
+#
+# The sixth formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Handoff records against
+# the definitions below.
+schema: handoff
+schema_version: "1.0"
+title: Tabularium Handoff Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Handoff contract.
+
+description: >
+  A Handoff is an IMMUTABLE, TASK-BOUND, POINT-IN-TIME CONTINUATION SNAPSHOT
+  containing the minimum state and guidance another actor needs to safely
+  continue work.
+
+  It transfers INFORMATION.
+
+# ---------------------------------------------------------------------------
+# WHAT A HANDOFF DOES NOT TRANSFER
+# ---------------------------------------------------------------------------
+
+does_not_transfer:
+  - authority
+  - approval
+  - Task ownership
+  - scope authorization
+  - truth
+  - proof of completion
+  - proof of validation
+
+not_this:
+  not_a_lifecycle_object: >
+    A Handoff is an artifact, not a workflow item. It has no status, no
+    acknowledgment, no acceptance, and no completion state.
+  not_a_report: >
+    A Handoff supports CONTINUATION. Durable summarized outcomes are Report's
+    concern; the Report contract is defined separately in report.schema.yaml.
+    Nothing here duplicates its fields or semantics.
+  not_evidence: >
+    A Handoff does not become Evidence and does not create it.
+  not_a_transcript: >
+    Not a chat transcript and not chain-of-thought.
+  not_an_assignment: >
+    A Handoff does not assign, route, or queue work.
+  no_secrets: >
+    Credentials, keys, and tokens are never written into a Handoff (immutable
+    principle 6).
+
+# ---------------------------------------------------------------------------
+# EVIDENTIARY SEMANTICS
+# ---------------------------------------------------------------------------
+
+evidentiary_semantics:
+
+  transferred_assertions: >
+    Everything a Handoff states is a TRANSFERRED ASSERTION — what the producing
+    actor claims at that moment. It is not established fact.
+
+  worked_examples:
+    tests_passed: >
+      A Handoff stating "tests passed" does NOT establish that tests actually
+      passed. It establishes that the producer said so.
+    implementation_complete: >
+      A Handoff stating "implementation complete" does NOT mark the Task
+      COMPLETED, and does not prove the work is done.
+
+  does_not_become_evidence: >
+    A Handoff does not automatically become Evidence, and creating one creates
+    no Evidence record.
+
+  how_to_support_a_claim: >
+    Where material evidentiary support exists, reference canonical Evidence
+    records through the `evidence` field. Evidence keeps its own semantics —
+    this contract does not duplicate `source_type`, does not assess
+    reliability, and changes nothing about a referenced record.
+
+# ---------------------------------------------------------------------------
+# AUTHORITY AND MUTATION BOUNDARIES
+# ---------------------------------------------------------------------------
+
+boundaries:
+
+  creating_or_reading_mutates_nothing: >
+    Creating or reading a Handoff must NOT automatically mutate Task status,
+    mutate Task assignment, change approved scope, close Questions, change an
+    Investigation's status, alter a Decision, alter Evidence, authorize
+    execution, or approve work.
+
+  body_cannot_expand_scope: >
+    Instructions in the body cannot expand a Task's approved scope. Scope is
+    bounded by the Task's own approval (task.schema.yaml). A Handoff that
+    appears to widen it is
+    describing work that has not been approved.
+
+  no_authority: >
+    A Handoff grants no authority to anyone, including its
+    `intended_recipient`. Authority rests with the human authority and is not
+    conveyed by a record.
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Six fields are required. Everything else is optional, and the substance of
+    a Handoff lives in the body rather than in structured metadata.
+
+  no_conditional_fields: >
+    Unlike Task, Decision, and Question, this contract has NO conditionally
+    required fields — there is no lifecycle status for a requirement to be
+    keyed to.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO default values.
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset. Formatting convention
+    only; no clock authority or ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is the authoritative statement; this contract adds no exceptions to
+    it — no relationship field here implies reciprocity, authority, approval,
+    ownership, or a lifecycle transition in the referenced record.
+
+    In summary as it applies here: references to formalized record types use
+    the target's canonical id (TASK, HND, INV, DEC, EVD, QST). Nothing resolves
+    a reference, a reference that does not resolve does not invalidate the
+    record, references are project-local, and cross-project transfer syntax is
+    NOT IMPLEMENTED.
+
+  no_state_history: >
+    A Handoff carries no history, no revision array, and no lifecycle. It is a
+    snapshot: a later snapshot is a new record.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "HND-YYYY-NNNN"
+  regex: "^HND-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the project handoff namespace
+  examples:
+    - HND-2026-0001
+    - HND-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic ID allocation is deliberately out of scope. Who
+    allocates the next number, and how collisions are prevented, is
+    NOT SPECIFIED.
+  sequence_exhaustion: >
+    NOT SPECIFIED. The behavior beyond 9999 records in one year has no defined
+    answer.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND RECORD FORMAT
+# ---------------------------------------------------------------------------
+
+storage:
+
+  location: ".ai/handoffs/"
+  description: >
+    Handoff records belong in the `.ai/handoffs/` directory of a project's AI
+    context. See ../templates/project/README.md.
+
+  file_naming:
+    pattern: ".ai/handoffs/HND-YYYY-NNNN.md"
+    regex: "^\\.ai/handoffs/HND-[0-9]{4}-[0-9]{4}\\.md$"
+    rule: >
+      The filename MUST equal the Handoff id, with the .md extension. A record
+      whose filename and id disagree is invalid; neither one silently wins.
+    example: ".ai/handoffs/HND-2026-0001.md"
+
+  project_scope: >
+    Project membership is POSITIONAL — a Handoff belongs to the project whose
+    `.ai/` directory contains it. There is deliberately NO `project` field, and
+    no cross-project transfer syntax exists. See README.md ("Project scoping").
+
+  discovery: >
+    Records are found by their filename, which is the id. Nothing indexes,
+    lists, caches, queues, or routes them.
+
+record_format:
+
+  canonical: Markdown document with YAML frontmatter
+  extension: ".md"
+  example: ../templates/handoff/handoff.md
+
+  authority: >
+    Machine-authoritative metadata lives in the YAML frontmatter. The
+    continuation snapshot lives in the Markdown body.
+
+    Every field defined in this contract lives in the frontmatter and is
+    validated against it. Where body and frontmatter appear to disagree, the
+    frontmatter governs.
+
+  the_body_is_the_substance: >
+    Unlike most contracts here, the useful content of a Handoff is deliberately
+    NARRATIVE. Do not turn every narrative concept into a frontmatter field.
+
+  required_body_sections:
+    - "## Current State"
+    - "## Continuation"
+
+  current_state_holds: >
+    Only the bounded state necessary for continuation — work completed so far,
+    work remaining, known blockers, and relevant task-specific context.
+
+  continuation_holds: >
+    The next safe action, and the prerequisites or cautions needed before
+    continuing.
+
+  body_may_mention: >
+    Validation claims, relevant paths, changed files, and observations, where
+    useful. These remain NARRATIVE ASSERTIONS — see evidentiary_semantics.
+
+  no_machine_authoritative_duplicates: >
+    The body's claims must NOT be promoted into machine-authoritative fields.
+    This contract deliberately has no `files_changed`, `validation`,
+    `validation_status`, `completion_status`, `status`, `scope`, `priority`,
+    `risk`, or `approval` field, and none may be added. Task state, scope,
+    risk, and approval belong to the Task record and are not duplicated here.
+
+  no_structured_task_duplicate: >
+    A Handoff does not restate the Task's fields in structured form. It
+    references the Task and describes what a continuing actor needs.
+
+# ---------------------------------------------------------------------------
+# REQUIRED FIELDS
+# ---------------------------------------------------------------------------
+
+required_fields:
+  - schema_version
+  - id
+  - title
+  - task
+  - created_at
+  - created_by
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  # --- identity -----------------------------------------------------------
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.0"]
+    description: >
+      The version of this contract that the record conforms to. Carried on the
+      record so a future validator can select the correct contract.
+
+  id:
+    type: string
+    required: true
+    pattern: "^HND-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: HND-2026-0001
+
+  title:
+    type: string
+    required: true
+    description: >
+      A short, human-scannable label for this continuation snapshot. One line.
+    example: Authentication investigation, handing over before reproduction
+
+  # --- task binding -------------------------------------------------------
+
+  task:
+    type: string
+    required: true
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The single Task this Handoff continues. REQUIRED — every Handoff is
+      Task-bound.
+
+      Exactly ONE Task. This field is singular, not a list: v1.0 supports no
+      multi-Task handoff and no project-level unbound handoff.
+
+      Referencing the Task does not assign it, does not change its status, and
+      does not alter its approved scope.
+
+  # --- direction ----------------------------------------------------------
+
+  intended_recipient:
+    type: string
+    required: false
+    description: >
+      Who the producer intends to continue the work. An OPTIONAL, OPAQUE
+      reference.
+
+      The contract does NOT determine whether this string names a human, an
+      agent, a model, a role, a worker, or a reviewer. No role semantics exist
+      and none may be inferred.
+
+      It does NOT assign the Task, grant authority, prove receipt, or prove
+      acceptance. A Handoff is fully valid without it — a snapshot may be
+      written for whoever picks the work up next.
+
+      The producing actor is `created_by`. There is deliberately no separate
+      `sender` or `from_actor` field.
+
+  # --- lineage ------------------------------------------------------------
+
+  previous_handoff:
+    type: string
+    required: false
+    pattern: "^HND-[0-9]{4}-[0-9]{4}$"
+    description: >
+      An opaque, project-local LINEAGE reference: the producer indicates that
+      this Handoff follows the referenced one in the intended continuation
+      lineage.
+
+      It establishes NO supersession, invalidation, replacement, authority, or
+      reciprocity. The earlier Handoff remains exactly as valid as it was.
+
+      Because references are not resolved, the contract does NOT guarantee that
+      the referenced Handoff exists, belongs to the same Task, is literally the
+      immediately previous one, or that the chain is acyclic. No validation
+      machinery for those properties exists, and none may be invented.
+
+  # --- relationships ------------------------------------------------------
+  #
+  # All optional. All opaque. None implies reciprocity or authority, and none
+  # mutates its target.
+
+  investigations:
+    type: list[string]
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: Investigations a continuing actor needs to know about.
+
+  decisions:
+    type: list[string]
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Decisions bearing on the continuation. Referencing one neither approves
+      nor alters it.
+
+  evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence supporting what this Handoff states. Referencing Evidence
+      neither copies it, modifies it, nor changes its reliability — and the
+      Handoff's own claims do not thereby become evidenced.
+
+  questions:
+    type: list[string]
+    required: false
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Questions open or relevant at the moment of handoff. Referencing one does
+      not answer, close, or reopen it.
+
+  # --- provenance ---------------------------------------------------------
+
+  created_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: >
+      When the Handoff was written. This is the point in time the snapshot
+      describes.
+    example: "2026-08-19T16:45:00Z"
+
+  created_by:
+    type: string
+    required: true
+    description: >
+      The producing actor. An OPAQUE ACTOR REFERENCE — no identity system
+      exists, and nothing resolves, verifies, or authenticates the value.
+
+      This is the only actor-of-origin field; see intended_recipient for why no
+      `sender` counterpart exists.
+
+# ---------------------------------------------------------------------------
+# NO LIFECYCLE
+# ---------------------------------------------------------------------------
+
+no_lifecycle:
+
+  rule: >
+    Handoff v1.0 has NO lifecycle state. There is no `status` field and none
+    may be added.
+
+  creation_is_issuance: >
+    Creating the record constitutes issuance of the artifact. Nothing further
+    happens to it.
+
+  excluded_states:
+    - DRAFT
+    - ISSUED
+    - RECEIVED
+    - ACKNOWLEDGED
+    - ACCEPTED
+    - REJECTED
+    - COMPLETED
+    - ARCHIVED
+
+  where_that_belongs: >
+    Acknowledgment, routing, receipt, retries, queues, and execution state
+    belong to future orchestration, not to Handoff. None of it is implemented.
+
+# ---------------------------------------------------------------------------
+# IMMUTABILITY
+# ---------------------------------------------------------------------------
+
+immutability:
+
+  rule: >
+    A Handoff is IMMUTABLE AFTER CREATION. It is a point-in-time snapshot, and
+    a snapshot that can be edited is not one.
+
+  frozen:
+    frontmatter: ALL fields, without exception
+    body: ALL Markdown body content
+
+  no_updated_at: >
+    There is deliberately NO `updated_at` field. Nothing about a Handoff
+    changes after it is written, so there is nothing for it to record.
+
+  no_correction_in_place: >
+    An existing Handoff is NOT modified to correct it or to refresh it with
+    newer state. If the state changed, or the snapshot was wrong, write a NEW
+    Handoff — optionally pointing at the earlier one through
+    `previous_handoff`, which is lineage and not replacement.
+
+  no_mechanism: >
+    No hashes, signatures, revision arrays, or event sourcing. This is a
+    contract rule.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing prevents an existing record from being edited.
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+
+limitations:
+
+  id_allocation:
+    status: NOT IMPLEMENTED
+    detail: Manual. Nothing allocates the next number or detects a collision.
+
+  validation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a record, checks that a filename matches its id, or
+      verifies any lineage property.
+
+  orchestration:
+    status: NOT IMPLEMENTED
+    detail: >
+      No routing, queueing, retry state, acknowledgment, acceptance, receipt,
+      or assignment. Handoff records a snapshot; it moves nothing.
+
+  identity_and_authority:
+    status: NOT IMPLEMENTED
+    detail: >
+      `created_by` and `intended_recipient` are opaque references. No identity
+      schema, role model, authority registry, or delegation exists.
+
+  supersession:
+    status: NOT IMPLEMENTED
+    detail: >
+      Handoff defines no supersession semantics. Under the contract-specific
+      supersession ruling (README.md), a contract has none unless it defines
+      them, and Handoff deliberately does not. `previous_handoff` is lineage
+      only.
+
+  cross_project_transfer:
+    status: NOT IMPLEMENTED
+    detail: >
+      References are project-local. There is no cross-project handoff syntax.
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: No migration tooling, format, or procedure exists.
+
+# ---------------------------------------------------------------------------
+# EXPLICITLY DEFERRED
+# ---------------------------------------------------------------------------
+#
+# Known future possibilities, recorded so they are not mistaken for oversights.
+# They are NOT part of v1.0 and are not to be solved here.
+
+deferred:
+
+  - id: correction-and-supersession-semantics
+    detail: >
+      Whether Handoff should ever gain correction or supersession semantics
+      beyond immutable lineage. v1.0 answers this with immutability plus
+      `previous_handoff`: a changed or corrected snapshot is a new record.
+      NOT PART OF v1.0.
+
+  - id: machine-readable-receipt
+    detail: >
+      Whether a future orchestration layer needs machine-readable receipt or
+      acknowledgment. v1.0 records none, because acknowledgment is orchestration
+      state rather than a property of the snapshot. NOT PART OF v1.0.

@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tabularium-os"
+dynamic = ["version"]
+description = "Governed context and execution for AI-assisted project work"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+tabu = "tabularium.cli:main"
+
+[project.optional-dependencies]
+api = ["litellm>=1.60,<2"]
+runtime = [
+    "langgraph>=1.2.11,<2",
+    "langgraph-checkpoint-sqlite>=3.1,<4",
+]
+observability = [
+    "opentelemetry-api>=1.44,<2",
+    "opentelemetry-sdk>=1.44,<2",
+    "langfuse>=4.14,<5",
+]
+dev = ["pydantic>=2.9,<3", "pytest>=8,<9", "pytest-subtests>=0.13,<1"]
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
+
+[tool.setuptools]
+include-package-data = true
+packages = [
+    "tabularium",
+    "tabularium.engine",
+    "tabularium.engine.code_gate",
+    "tabularium.engine.code_indexer",
+    "tabularium.engine.context_loader",
+    "tabularium.engine.continuation",
+    "tabularium.engine.execution",
+    "tabularium.engine.interop",
+    "tabularium.engine.memory",
+    "tabularium.engine.observability",
+    "tabularium.engine.persistence",
+    "tabularium.engine.policies",
+    "tabularium.engine.projection",
+    "tabularium.engine.remote",
+    "tabularium.engine.runtime",
+    "tabularium.engine.shadow_contracts",
+    "tabularium.engine.skills",
+    "tabularium.engine.tools",
+    "tabularium.engine.tui",
+    "tabularium.engine.workers",
+    "tabularium.engine.workers.api",
+    "tabularium.engine.workers.cli",
+    "tabularium.schemas",
+    "tabularium.templates",
+]
+
+[tool.setuptools.package-data]
+"tabularium.schemas" = ["*.schema.yaml", "README.md"]
+"tabularium.templates" = [
+    "project/*.md",
+    "project/*.yaml",
+    "task/README.md",
+    "evidence/README.md",
+    "investigation/README.md",
+    "decision/README.md",
+    "question/README.md",
+    "handoff/README.md",
+    "report/README.md",
+]

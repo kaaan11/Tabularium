@@ -1,0 +1,474 @@
+# Tabularium Report Contract
+#
+# The seventh formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Report records against
+# the definitions below.
+schema: report
+schema_version: "1.0"
+title: Tabularium Report Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Report contract.
+
+description: >
+  A Report is an IMMUTABLE, TASK-BOUND, OUTCOME-ORIENTED DURABLE SUMMARY of
+  work. It records enough information for a future reader to understand what
+  work occurred, what resulted, what was checked or observed, and what
+  limitations remain without relying on chat history.
+
+does_not_establish:
+  - Task completion
+  - approval
+  - authority
+  - Decision
+  - Evidence
+  - validation truth
+  - execution authorization
+
+# ---------------------------------------------------------------------------
+# CONTRACT BOUNDARIES
+# ---------------------------------------------------------------------------
+
+not_this:
+
+  not_a_task: >
+    Task owns objective, lifecycle, priority, risk, approved scope, assignment,
+    approval, and work state. Report summarizes an outcome and does not
+    duplicate or mutate those machine-authoritative Task properties.
+
+  not_a_handoff: >
+    Handoff supports CONTINUATION. Report records an OUTCOME. An optional Next
+    Steps section does not transfer or assign work and does not turn a Report
+    into a Handoff.
+
+  not_evidence: >
+    Report assertions and conclusions do not become Evidence. Material claims
+    may reference Evidence records through the `evidence` field.
+
+  not_an_investigation: >
+    Investigation owns the auditable hypothesis, action, Evidence, and
+    evaluation structure. A Report may summarize its outcome and reference it,
+    but does not reproduce that inquiry structure or chain-of-thought.
+
+  not_a_decision: >
+    A Report conclusion is not a Decision. Creating a Report neither approves
+    a choice nor exercises governance authority.
+
+  not_a_general_document: >
+    Report v1.0 is not a universal document format, project history, chat
+    transcript, or context store.
+
+  no_secrets: >
+    Credentials, keys, and tokens are never written into a Report (immutable
+    principle 6).
+
+# ---------------------------------------------------------------------------
+# EVIDENTIARY SEMANTICS
+# ---------------------------------------------------------------------------
+
+evidentiary_semantics:
+
+  summary_assertions: >
+    Statements and conclusions in a Report are SUMMARY ASSERTIONS. Their
+    presence records what the producing actor reported; it does not establish
+    their truth.
+
+  validation_is_narrative: >
+    The required Validation body section narrates what was checked, what was
+    observed, what was not checked, and remaining uncertainty. A statement
+    such as "all tests passed" does not automatically become Evidence or
+    established truth.
+
+  how_to_support_a_claim: >
+    Material claims may reference canonical Evidence records through the
+    `evidence` field. Referencing Evidence neither copies it, changes its
+    reliability or source_type, nor mutates it. Unsupported or partially
+    supported material claims are qualified in the body.
+
+  does_not_become_evidence: >
+    A Report does not automatically become Evidence, and creating one creates
+    no Evidence record.
+
+# ---------------------------------------------------------------------------
+# AUTHORITY AND MUTATION BOUNDARIES
+# ---------------------------------------------------------------------------
+
+boundaries:
+
+  creating_or_reading_mutates_nothing: >
+    Creating or reading a Report must NOT mark a Task COMPLETED, change Task
+    status, scope, approval, or assignment, mutate an Investigation, answer or
+    close a Question, alter a Decision, alter Evidence, acknowledge a Handoff,
+    authorize execution, or approve work.
+
+  task_transition_is_separate: >
+    Any Task lifecycle transition or relationship update is a separate,
+    explicit mutation governed by the Task contract. A Report may describe an
+    outcome but cannot perform that mutation.
+
+  no_authority: >
+    Report creation or publication grants no authority and constitutes no
+    approval. Authority rests with the human authority.
+
+  next_steps_are_not_instructions: >
+    Optional follow-up described in the body does not assign work, create a
+    Task, transfer work, expand approved scope, or authorize execution.
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Six fields are required. Everything else is optional, and the substantive
+    outcome account lives in the body rather than in status, type, validation,
+    success, or file-change metadata.
+
+  no_conditional_fields: >
+    Report v1.0 has no conditionally required frontmatter fields. There is no
+    lifecycle status for a requirement to depend on.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO defaults.
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset. This is a formatting
+    convention only; no clock authority or ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is authoritative; this contract adds no exception.
+
+    References use canonical TASK, RPT, INV, DEC, EVD, QST, and HND ids. They
+    are opaque, project-local, and non-resolving. A missing target does not by
+    that fact alone make the Report structurally invalid. No reference implies
+    reciprocity, authority, approval, ownership, or lifecycle mutation.
+
+  no_state_history: >
+    A Report carries no lifecycle history, revision array, or mutable current
+    pointer. A corrected or materially changed outcome is a new record.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "RPT-YYYY-NNNN"
+  regex: "^RPT-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the project report namespace
+  examples:
+    - RPT-2026-0001
+    - RPT-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic allocation and collision detection are outside
+    this contract.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND SERIALIZATION
+# ---------------------------------------------------------------------------
+
+storage:
+  directory: ".ai/reports/"
+  filename: "<id>.md"
+  canonical_path: ".ai/reports/RPT-YYYY-NNNN.md"
+  filename_must_equal_id: true
+  project_scope: positional
+  project_field: forbidden
+  description: >
+    Project membership comes from the `.ai/` directory containing the record.
+    Report defines no `project` field and no cross-project addressing syntax.
+
+serialization:
+  stored_format: markdown_with_yaml_frontmatter
+  frontmatter: >
+    Machine-authoritative metadata. Every structured Report field is defined
+    below and appears only in the YAML frontmatter.
+  body: >
+    Durable outcome narrative. It contains the required Outcome, Validation,
+    and Limitations sections and may contain an optional Next Steps section.
+    It must not restate a frontmatter value as a competing authoritative copy.
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.0"]
+    description: Contract version used by this record.
+
+  id:
+    type: string
+    required: true
+    pattern: "^RPT-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: RPT-2026-0001
+
+  title:
+    type: string
+    required: true
+    description: A short, human-scannable label for the outcome summary. One line.
+    example: Authentication investigation outcome
+
+  task:
+    type: string
+    required: true
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The single Task whose work this Report summarizes. REQUIRED and singular:
+      exactly one Task, no unbound Report, no multi-Task Report.
+
+      The reference does not mark the Task COMPLETED, change its status or
+      scope, alter approval or assignment, or imply a reciprocal Task link.
+
+  previous_report:
+    type: string
+    required: false
+    pattern: "^RPT-[0-9]{4}-[0-9]{4}$"
+    description: >
+      An opaque, project-local LINEAGE reference indicating that this Report
+      follows an earlier one. It establishes no supersession, invalidation,
+      replacement, precedence, reciprocity, current-effective state, or
+      authority.
+
+      Because references are not resolved, the contract does not guarantee
+      that the target exists, belongs to the same Task, is literally the
+      immediately previous Report, or produces an acyclic chain.
+
+  investigations:
+    type: list[string]
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Investigations whose outcomes bear on the summary. The Report may
+      summarize their conclusions but does not duplicate their inquiry
+      structure or mutate them.
+
+  decisions:
+    type: list[string]
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Decisions relevant to the outcome. Referencing or describing one neither
+      approves nor alters it, and Report conclusions do not become Decisions.
+
+  evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence supporting material Report claims. Referencing it neither
+      copies it, changes reliability or source_type, nor mutates it.
+
+  questions:
+    type: list[string]
+    required: false
+    pattern: "^QST-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Questions relevant or unresolved at reporting time. Referencing one does
+      not answer, close, withdraw, or reopen it.
+
+  handoffs:
+    type: list[string]
+    required: false
+    pattern: "^HND-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Handoffs relevant to provenance or continuity of the summarized work.
+      Referencing one does not acknowledge or mutate it.
+
+  created_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: When the durable Report was created and published.
+    example: "2026-08-20T16:45:00Z"
+
+  created_by:
+    type: string
+    required: true
+    description: >
+      The producing actor. An OPAQUE ACTOR REFERENCE. No identity system
+      exists, and nothing resolves, verifies, or authenticates the value.
+      This is the only actor field; no model, provider, agent type, or author
+      role is recorded.
+
+# ---------------------------------------------------------------------------
+# BODY CONTRACT
+# ---------------------------------------------------------------------------
+
+body_contract:
+
+  required_sections:
+    - "## Outcome"
+    - "## Validation"
+    - "## Limitations"
+
+  optional_sections:
+    - "## Next Steps"
+
+  outcome: >
+    Summarizes work performed, results, conclusions, failures, skipped work,
+    and material omissions. A conclusion here does not become a Decision.
+
+  validation: >
+    Narrative only. Explains what was checked, what was observed, what was not
+    checked, and remaining validation uncertainty. It creates no
+    machine-authoritative validation status, pass/fail result, or truth claim.
+
+  limitations: >
+    Records residual uncertainty, unresolved constraints, omissions, and
+    relevant unanswered Questions. If no limitation is known, the body says
+    that rather than silently omitting the required section.
+
+  next_steps: >
+    Optional narrative follow-up. It does not assign, transfer, authorize, or
+    execute work and cannot expand approved Task scope.
+
+  files_and_changes: >
+    File paths and changes may be mentioned narratively where useful. Report
+    v1.0 defines no structured files_changed field. Task actual_changes and
+    repository state retain their own semantics.
+
+# ---------------------------------------------------------------------------
+# NO LIFECYCLE
+# ---------------------------------------------------------------------------
+
+no_lifecycle:
+
+  rule: >
+    Report v1.0 has NO record lifecycle and no record `status` field.
+
+  creation_is_publication: >
+    Creating the stored record constitutes publication of the durable
+    artifact. An unfinished draft is not yet a Report record.
+
+  excluded_states:
+    - DRAFT
+    - FINAL
+    - PUBLISHED
+    - APPROVED
+    - ARCHIVED
+    - SUPERSEDED
+    - RETRACTED
+
+  no_workflow: >
+    Drafting, approval, publishing, routing, notification, and execution
+    workflows are not implemented by this contract.
+
+# ---------------------------------------------------------------------------
+# IMMUTABILITY, CORRECTION, AND LINEAGE
+# ---------------------------------------------------------------------------
+
+immutability:
+
+  rule: >
+    A Report is IMMUTABLE AFTER CREATION. Its durable outcome must not silently
+    change after a reader may have relied on it.
+
+  frozen:
+    frontmatter: ALL fields, without exception
+    body: ALL Markdown body content
+
+  no_updated_at: >
+    Report defines no `updated_at`: nothing in the record changes after
+    creation.
+
+  no_correction_in_place: >
+    A correction or materially changed outcome requires a NEW Report. The new
+    body explains the correction and may link to one earlier Report through
+    `previous_report`.
+
+  no_mechanism: >
+    No hashes, signatures, revision arrays, event sourcing, or mutable current
+    pointer are introduced. Immutability is a contract rule.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing prevents a stored file from being edited.
+
+correction_and_lineage:
+
+  previous_report_is_lineage_only: >
+    `previous_report` records lineage only. It does not establish
+    supersession, invalidation, replacement, precedence, reciprocity,
+    current-effective state, or authority.
+
+  no_supersession: >
+    Report v1.0 defines NO supersession mechanism. It inherits neither
+    Decision nor Evidence supersession semantics.
+
+  non_guarantees:
+    - target existence
+    - same-Task membership
+    - literal immediate precedence
+    - acyclic lineage
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+
+limitations:
+
+  id_allocation:
+    status: NOT IMPLEMENTED
+    detail: Manual. Nothing allocates the next number or detects collisions.
+
+  validation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a record, checks required body sections, checks that a
+      filename equals its id, resolves references, or verifies lineage.
+
+  automation:
+    status: NOT IMPLEMENTED
+    detail: >
+      No Task completion, routing, publication, approval, notification, queue,
+      or execution behavior is implemented.
+
+  identity_and_authority:
+    status: NOT IMPLEMENTED
+    detail: >
+      `created_by` is opaque. No identity schema, role model, authority
+      registry, delegation mechanism, or authentication exists.
+
+  supersession:
+    status: NOT IMPLEMENTED
+    detail: >
+      No Report supersession, precedence, or current-effective resolver exists.
+      `previous_report` is lineage only.
+
+  cross_project_reporting:
+    status: NOT IMPLEMENTED
+    detail: References are project-local; no cross-project syntax exists.
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: No migration tooling, format, or procedure exists.
+
+# ---------------------------------------------------------------------------
+# EXPLICITLY DEFERRED
+# ---------------------------------------------------------------------------
+
+deferred:
+
+  - id: correction-and-supersession-semantics
+    detail: >
+      Whether a later Report version needs explicit supersession or
+      current-effective semantics beyond immutable lineage. NOT PART OF v1.0.
+
+  - id: multi-task-or-project-reporting
+    detail: >
+      Whether a later version should permit multi-Task or project-level unbound
+      Reports. v1.0 requires exactly one Task. NOT PART OF v1.0.

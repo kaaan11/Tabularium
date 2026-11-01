@@ -1,0 +1,1275 @@
+# Tabularium Decision Contract
+#
+# The fourth formal data contract of the Tabularium.
+#
+# This file is a human-readable YAML contract, not an executable schema.
+# There is no validator, no schema library, and no dependency. A future
+# implementation is expected to be able to validate Decision records against
+# the definitions below.
+schema: decision
+schema_version: "1.2"
+title: Tabularium Decision Contract
+status: ACTIVE
+format: yaml
+
+amendments:
+  - version: "1.0"
+    change: Initial Decision contract.
+  - version: "1.1"
+    change: >
+      Approved amendment. Three governance corrections:
+
+      D1 — approval provenance. `approved_by` and `approved_at` became
+      CONDITIONALLY REQUIRED by lifecycle status: mandatory for APPROVED and
+      SUPERSEDED, forbidden for every other state. An APPROVED record can no
+      longer omit who approved it (immutable principle 3).
+
+      D2 — immutability. Added `what_may_change`, enumerating exactly the four
+      fields that may change after approval, and stating that the freeze covers
+      the BODY as well as the frontmatter. This resolves the contradiction
+      between "an approved Decision is not rewritten" and the
+      APPROVED -> SUPERSEDED transition.
+
+      D3 — supersession governance. `supersedes` may be recorded at any status,
+      but a target Decision may transition to SUPERSEDED only when the
+      superseding Decision is APPROVED. This closes the route by which an
+      unapproved record could retire an approved one.
+
+      No new entity, field, or mechanism was added beyond these three rules. No
+      authority field, no materiality model, no identity system, no validator —
+      see the D7 ruling recorded under authority.
+  - version: "1.2"
+    change: >
+      Approved amendment (DEC11-01). Behavioral governance correction to
+      EFFECTIVE SUPERSESSION INTEGRITY.
+
+      1.1 made supersession approval-bound but not reciprocal, and left
+      `superseded_by` indefinitely mutable. A record could therefore be marked
+      SUPERSEDED by pointing at an APPROVED Decision that never mentioned it —
+      approval of B was not approval of B AS THE REPLACEMENT FOR A — and the
+      relationship could later be removed or redirected in place.
+
+      1.2 requires effective supersession to be RECIPROCAL (B.supersedes must
+      contain A and A.superseded_by must contain B), APPROVAL-BOUND (only an
+      APPROVED B carrying `supersedes: [A]` may cause A to become SUPERSEDED),
+      and MONOTONIC (once A is SUPERSEDED its `superseded_by` is frozen; it
+      cannot be removed, redirected, or have its cardinality changed).
+
+      `what_may_change` was restructured from one flat list into PHASE-DEPENDENT
+      mutability, because a flat list implied `superseded_by` could be edited
+      indefinitely.
+
+      No new field, entity, or mechanism. Cardinality of multiple approved
+      successors remains architecturally unspecified and was NOT decided here.
+
+description: >
+  A Decision records what course of action was selected, rejected, or left
+  unresolved — together with who proposed it, what supported it, what was
+  objected to, and who had the authority to approve it.
+
+  Decision is the GOVERNANCE BOUNDARY between reasoning and action. It records
+  the decision process and the authority behind it. It does NOT execute
+  anything.
+
+epistemic_workflow:
+  chain: SOURCE -> EVIDENCE -> INVESTIGATION -> CONCLUSION -> DECISION
+  what_each_answers:
+    Task: What work is being performed?
+    Investigation: How is a problem being examined?
+    Evidence: What was observed, obtained, or asserted?
+    Decision: What course of action was selected, rejected, or left unresolved?
+  conclusion: >
+    NOT FORMALIZED as an entity. A conclusion is the narrative output of an
+    Investigation (investigation.schema.yaml).
+
+# ---------------------------------------------------------------------------
+# THE FOUR SEPARATE CONCEPTS
+# ---------------------------------------------------------------------------
+#
+# The reason this contract exists. Confusing any two of these is how an AI
+# system quietly starts governing itself.
+
+separation_of_concepts:
+
+  recommendation: >
+    A proposed course of action, from any contributor including a model. It
+    carries no authority whatsoever. Producing one changes nothing.
+
+  decision: >
+    A recorded selection among alternatives. A Decision record may exist —
+    with a question, alternatives, objections and a selection — while still
+    carrying no authority, because it has not been approved.
+
+  approval: >
+    Acceptance by the applicable authority. Approval is what gives a decision
+    force. It is an explicit act by that authority and never a side effect of
+    anything else.
+
+  execution: >
+    Actually doing the thing. NOT IN SCOPE. This contract records nothing about
+    execution, triggers nothing, and permits nothing. Execution will be
+    designed later.
+
+  the_rule: >
+    RECOMMENDATION is not DECISION. DECISION is not APPROVAL. APPROVAL is not
+    EXECUTION. This contract records the first three and stops. A record must
+    never be readable in a way that blurs them.
+
+# ---------------------------------------------------------------------------
+# GOVERNANCE PRINCIPLE
+# ---------------------------------------------------------------------------
+
+governance:
+
+  models_may:
+    - propose
+    - recommend
+    - challenge
+    - disagree
+    - provide alternatives
+    - provide evidence
+    - identify risks
+    - question a user's decision
+
+  models_do_not_become_authoritative: >
+    A model does NOT become authoritative merely because it produced a
+    proposal. A model's statement is not a decision. A recommendation is not an
+    approval (immutable principle 7).
+
+  user_decisions_are_not_automatically_correct: >
+    A user decision is not automatically considered technically correct. A
+    model may question it, cite evidence against it, and record an objection.
+    What a model may not do is override it, or quietly proceed as though a
+    different decision had been made (immutable principle 8).
+
+  what_must_be_preserved:
+    - WHO proposed something
+    - WHY it was proposed
+    - WHAT evidence supported it
+    - WHAT alternatives existed
+    - WHAT objections were raised
+    - WHO had authority to approve
+    - WHAT was ultimately decided
+
+  where_it_is_preserved: >
+    In the body sections of the record. See body_structure. These are narrative
+    at this stage — no sub-entity was created for any of them.
+
+# ---------------------------------------------------------------------------
+# AUTHORITY
+# ---------------------------------------------------------------------------
+
+authority:
+
+  question_the_record_must_answer: >
+    WHO is authorized to make the final decision?
+
+  recorded_where: >
+    An explicit "## Authority" section in the body. Narrative at this stage.
+
+  not_inferred_from: >
+    Authority is NOT inferred from anything. Specifically:
+      - the contributor who CREATED the record is not thereby the authority
+      - the contributor who PROPOSED the selected alternative is not thereby
+        the authority
+      - the contributor who wrote the most, argued best, or objected loudest is
+        not thereby the authority
+    Authority is stated, or it is unknown.
+
+  human_authority_principle: >
+    When a decision materially affects the user's project, architecture,
+    security posture, data, cost, destructive operations, or other
+    consequential outcomes, THE FINAL AUTHORITY REMAINS THE USER unless an
+    explicitly approved delegation mechanism exists.
+
+  delegation:
+    status: NOT IMPLEMENTED
+    detail: >
+      No delegation mechanism exists. No delegated authority can be recorded,
+      claimed, or exercised, and none may be invented. Until a delegation
+      mechanism is explicitly approved, the human authority principle applies
+      without exception.
+
+  identity:
+    status: NOT IMPLEMENTED
+    detail: >
+      No Identity schema exists and none was created. Contributors and
+      authorities are OPAQUE IDENTIFIERS. Nothing resolves, verifies, or
+      authenticates them, and identity must not be inferred from a display
+      name.
+
+# ---------------------------------------------------------------------------
+# CONTRIBUTORS
+# ---------------------------------------------------------------------------
+
+contributors:
+
+  model_agnostic: >
+    The system is model-agnostic. There are NO model-specific fields — no
+    claude_proposal, no chatgpt_proposal, no codex_proposal, and no field named
+    after any vendor or model. None may be added.
+
+  representation: >
+    Contributors are recorded in the body as opaque identifiers with a stated
+    role, for example:
+
+      Contributor: model-A   Role: proposer
+      Contributor: model-B   Role: reviewer
+      Contributor: user      Role: authority
+
+  no_capability_assumption: >
+    Nothing in this contract assumes anything about what a given contributor is
+    good at. Model capability knowledge is UNKNOWN until supported by evidence.
+
+  no_routing: >
+    NOT IMPLEMENTED. This contract selects no contributor, assigns no work, and
+    performs no routing.
+
+# ---------------------------------------------------------------------------
+# BODY STRUCTURE
+# ---------------------------------------------------------------------------
+#
+# The substance of a Decision lives in the body. None of these are contract
+# fields, and no sub-entity schema exists for any of them.
+
+body_structure:
+
+  sections:
+
+    Context: >
+      What prompted the decision. Optional narrative.
+
+    Authority: >
+      WHO is authorized to make the final decision. See authority.
+
+    Alternatives: >
+      The courses of action considered, one subsection each, identified locally
+      as A1, A2, A3. See alternatives.
+
+    "Objections and dissent": >
+      Disagreement, recorded rather than resolved away. See dissent.
+
+    "Selected decision": >
+      The course of action selected — NARRATIVE. There is deliberately no
+      selected_decision frontmatter field: the machine-readable part of a
+      Decision is its `status`, which says whether the record has been
+      approved, not which option won.
+
+    Rationale: >
+      WHY the selected alternative was chosen. See rationale.
+
+    Risks: >
+      What could go wrong with the selected course. See risks.
+
+  proposal_vs_final_decision: >
+    A Decision record MAY EXIST BEFORE A FINAL DECISION EXISTS. A record in
+    PROPOSED or UNDER_REVIEW holds a proposal and nothing more.
+
+    The body must therefore keep the two visibly apart: what is being proposed,
+    versus what was finally decided. A record that reads as though a proposal
+    were already the outcome is a defective record.
+
+    No Proposal schema and no FinalDecision schema exist. The distinction is
+    narrative plus `status`.
+
+# ---------------------------------------------------------------------------
+# ALTERNATIVES
+# ---------------------------------------------------------------------------
+
+alternatives:
+
+  representation: >
+    Each alternative is a subsection of the body identified by a simple local
+    identifier: A1, A2, A3. Local to this Decision; there are NO global
+    Alternative ids.
+
+  conceptual_shape:
+    id: A1, A2, A3 — local to this Decision
+    statement: the course of action, in one line
+    proposed_by: opaque contributor identifier
+    supporting_evidence: Evidence ids that bear on it
+    advantages: what it gets right
+    risks: what it costs or endangers
+
+  at_least_two: >
+    A Decision with one alternative is a decision that was never really made.
+    Recording the alternatives that were considered and set aside is part of
+    what makes the record auditable.
+
+  no_alternative_schema: >
+    NOT IMPLEMENTED, deliberately. Alternatives are not records and have no
+    global ids.
+
+  numbering: >
+    A-numbers are local and positional. Whether they are append-only, as
+    hypothesis H-numbers are, is NOT SPECIFIED — see open_questions.
+
+# ---------------------------------------------------------------------------
+# OBJECTIONS AND DISSENT
+# ---------------------------------------------------------------------------
+
+dissent:
+
+  required_capability: >
+    The record MUST be able to represent disagreement. A decision process in
+    which no one could dissent is not a governance record.
+
+  recorded_where: '## Objections and dissent'
+
+  an_objection_records:
+    - who objected (opaque contributor identifier)
+    - what they objected to
+    - evidence cited
+    - alternative proposed
+    - whether the objection was accepted or rejected
+    - reason
+
+  dissent_survives_the_decision: >
+    An objection that was overruled STAYS IN THE RECORD. It is not deleted,
+    softened, or summarised away once the decision goes the other way. The
+    record of a disagreement is what makes a later reader able to see that the
+    risk was known and accepted rather than missed (immutable principles 5
+    and 8).
+
+  no_dissent_schema: >
+    NOT IMPLEMENTED, deliberately.
+
+  no_voting:
+    status: NOT IMPLEMENTED
+    detail: >
+      There is NO Vote schema, no vote counting, no quorum, no majority rule,
+      and no tallying of any kind. Decisions are not carried by weight of
+      numbers. Objections are weighed by the authority, not counted.
+
+# ---------------------------------------------------------------------------
+# RATIONALE
+# ---------------------------------------------------------------------------
+
+rationale:
+
+  must_explain: >
+    WHY the selected alternative was chosen.
+
+  should_distinguish:
+    evidence: what is actually supported by an Evidence record
+    assumptions: what is being taken as true without evidence
+    constraints: what limited the choice regardless of preference
+    preferences: what was chosen because it was preferred, not because it was forced
+    risk_tradeoffs: what was accepted in exchange for what
+
+  why_the_distinction: >
+    A rationale that mixes these is unreviewable — a later reader cannot tell
+    which parts would change if the evidence changed. Evidence is not opinion
+    (immutable principle 2), and a preference stated as a constraint is a
+    preference that cannot be challenged.
+
+  no_formal_framework: >
+    NOT SPECIFIED. No formal reasoning framework, scoring method, or weighting
+    is required or defined at this stage.
+
+# ---------------------------------------------------------------------------
+# RISKS
+# ---------------------------------------------------------------------------
+
+risks:
+
+  recorded_where: '## Risks'
+
+  a_risk_records:
+    risk: what could go wrong
+    severity: how bad it would be
+    mitigation: what reduces it
+    owner: who holds it, if applicable
+
+  no_risk_schema: >
+    NOT IMPLEMENTED, deliberately.
+
+  no_vocabulary: >
+    NOT SPECIFIED. There is no global risk vocabulary and no severity scale
+    defined for this contract. Do not invent one, and do not borrow the Task
+    contract's `risk` enum — that field means something else, and reusing its
+    values here would imply a shared scale that has not been agreed.
+
+# ---------------------------------------------------------------------------
+# EVIDENCE INDEPENDENCE
+# ---------------------------------------------------------------------------
+
+evidence_independence:
+
+  references_only: >
+    A Decision REFERENCES Evidence by opaque id. Evidence content is never
+    copied into a Decision.
+
+  no_modification: >
+    A Decision does NOT modify Evidence records. It cannot change a record's
+    status, its reliability, or its observation.
+
+  no_reliability_upgrade: >
+    A Decision does NOT upgrade evidence reliability. A MODEL_ASSERTION remains
+    a MODEL_ASSERTION however heavily it is relied upon, and being cited in an
+    approved Decision does not make it more reliable. Approval is a governance
+    act, not an epistemic one.
+
+# ---------------------------------------------------------------------------
+# IMMUTABILITY AND REVERSAL
+# ---------------------------------------------------------------------------
+
+immutability:
+
+  rule: >
+    An APPROVED Decision must not be rewritten to change what was decided. What
+    was decided, and on what basis, is the record.
+
+  what_may_change:
+
+    principle: >
+      Mutability after approval is PHASE-DEPENDENT. It is not one flat list.
+
+      A field that may change while a Decision is APPROVED does not stay
+      mutable once that Decision has been SUPERSEDED. Stating it as a single
+      list would imply `superseded_by` could be edited indefinitely, which
+      would let an effective supersession be silently removed or redirected
+      after the fact.
+
+    phase_while_APPROVED:
+      fields: [status, superseded_by, related_decisions, updated_at]
+      detail: >
+        While a Decision is APPROVED and not yet superseded:
+
+          status            — only APPROVED -> SUPERSEDED, and only under
+                              supersession.effective_supersession
+          superseded_by     — may be populated ONLY as part of that same
+                              transition; see transition_is_indivisible
+          related_decisions — untyped relations discovered later
+          updated_at        — records that one of the above changed
+
+    phase_once_SUPERSEDED:
+      fields: [related_decisions, updated_at]
+      frozen: [status, superseded_by, supersedes, approved_by, approved_at]
+      detail: >
+        Once a Decision is SUPERSEDED:
+
+          status         — TERMINAL. There is no transition out of SUPERSEDED.
+          superseded_by  — FROZEN. It cannot be removed, redirected, replaced
+                           with a different Decision, or have its cardinality
+                           changed. See monotonic.
+          supersedes     — FROZEN, as it has been since approval.
+          approval provenance, substantive content, and the entire body remain
+          frozen exactly as they were at approval.
+
+          related_decisions and updated_at remain mutable — they record untyped
+          relations and the fact that something was touched, and neither states
+          what was decided or what replaced it.
+
+    transition_is_indivisible: >
+      The status change and the acquisition of `superseded_by` are ONE act, not
+      two. Expressed declaratively, without any transaction machinery:
+
+        - a Decision that is not SUPERSEDED MUST NOT carry `superseded_by`
+        - a Decision that IS SUPERSEDED MUST carry `superseded_by`
+
+      There is therefore no valid intermediate state in which a record is
+      SUPERSEDED but unattributed, or carries a replacement while still in
+      force.
+
+    what_this_preserves: >
+      Changing a phase-permitted field states how the record is now REGARDED.
+      It never changes what the record says was decided.
+
+  frozen_after_approval:
+    frontmatter: >
+      Every field not permitted by the current phase in what_may_change is
+      frozen: schema_version, id, title, question, task, investigation,
+      evidence, supersedes, created_at, created_by, and the approval provenance
+      fields approved_by and approved_at.
+
+      `supersedes` is frozen from the moment of approval. It is part of what the
+      authority approved — see supersedes_is_approved_content.
+    body: >
+      THE BODY IS FROZEN TOO. This is not a frontmatter-only rule.
+
+      The substance of a Decision lives in the body — the authority section,
+      the alternatives, the objections and dissent, the selected decision, the
+      rationale, and the risks. Freezing the metadata while leaving the body
+      editable would protect the label and lose the decision.
+
+      An overruled objection in particular is never removed, softened, or
+      summarised after approval. It is the record that a risk was known and
+      accepted rather than missed (immutable principles 5 and 8).
+    why_this_is_the_scope_binding: >
+      Approval is scoped to what was actually approved. Because the substance
+      cannot change after
+      approval, the approval is bound to it by construction — with no scope
+      field, no second copy of the approved content, and no content hashing.
+      A record whose body was edited after approval carries an approval the
+      authority never gave.
+
+  how_to_change_course: >
+    Create a NEW Decision. The old one becomes SUPERSEDED and is referenced by
+    the new one. The old record remains historically meaningful and is not
+    deleted.
+
+    Supersession is a CONTROLLED LIFECYCLE CHANGE, not permission to rewrite an
+    approved Decision. It changes one status value and a reference; it touches
+    nothing that was approved.
+
+  no_reversal_by_status: >
+    An approved Decision is NOT reversed by editing its status.
+    APPROVED -> REJECTED and APPROVED -> WITHDRAWN are INVALID. The only
+    transition out of APPROVED is to SUPERSEDED, and that happens because a
+    later Decision replaced it — not because someone changed their mind in
+    place.
+
+  enforcement: >
+    NOT IMPLEMENTED. This is a contract rule. No immutable storage tooling
+    exists; the guarantee currently rests on Git history and on following the
+    rule.
+
+supersession:
+
+  fields: [supersedes, superseded_by]
+
+  relationship: >
+    If DEC-A is effectively superseded by DEC-B, then DEC-A CARRIES
+    superseded_by: [DEC-B] and DEC-B CARRIES supersedes: [DEC-A]. Two
+    directional views of one relationship, and BOTH are required — see
+    effective_supersession, which makes reciprocity normative rather than
+    optional.
+
+  no_deletion: >
+    A superseded Decision is NOT deleted. It records what was decided at the
+    time and why, which stays true even after the course changed.
+
+  effective_supersession:
+
+    required_properties: [RECIPROCAL, APPROVAL_BOUND, MONOTONIC]
+
+    scope_of_these_rules: >
+      These three properties are DECISION-SPECIFIC. They are not a general
+      supersession invariant and are not inherited by any other contract — see
+      README.md ("Supersession semantics are contract-specific"), which is the
+      authoritative statement.
+
+      They are stronger than the generic reference default because superseding
+      an APPROVED Decision retires a human-governed choice. Evidence
+      supersession, which expresses evidentiary lineage rather than governance,
+      is deliberately not held to them.
+
+    invariant: >
+      Decision A is effectively superseded by Decision B if and only if ALL
+      THREE hold:
+
+        1. B.status == APPROVED
+        2. B.supersedes CONTAINS A          (reciprocal, forward view)
+        3. A.superseded_by CONTAINS B       (reciprocal, reverse view)
+
+      If any one is missing there is no effective supersession, and A.status
+      MUST NOT be SUPERSEDED.
+
+    recording_vs_effect: >
+      Recording an intention to supersede and actually superseding are separate
+      acts, and they are governed differently.
+
+    recording: >
+      `supersedes` MAY be recorded at ANY status. A proposal is allowed to
+      state that it intends to replace an existing Decision — that is part of
+      what it is proposing, and suppressing it would hide the proposal's
+      actual scope. Recording the intention supersedes nothing.
+
+    reciprocal: >
+      A Decision merely being APPROVED is NOT sufficient.
+
+      B's own frozen approved content must explicitly identify the Decision it
+      supersedes. Otherwise A could be marked SUPERSEDED by pointing at an
+      APPROVED but entirely unrelated B — and the authority's approval of B
+      would not have been an approval of B AS THE REPLACEMENT FOR A.
+
+      The two records are opposite directions of the SAME relationship, and
+      both directions must be present for it to have effect.
+
+    approval_bound: >
+      Only when B reaches APPROVED while carrying `supersedes: [A]` may A
+      transition APPROVED -> SUPERSEDED and record `superseded_by: [B]`.
+
+      Because `supersedes` is frozen at approval, the authority's approval of B
+      also freezes the SPECIFIC supersession relationship that was approved.
+      What was authorised is not "B" in the abstract but "B, replacing A".
+
+    monotonic: >
+      Once A has transitioned to SUPERSEDED and recorded `superseded_by: [B]`,
+      that effective relationship MUST NOT later be removed, redirected, or
+      replaced. `superseded_by` is frozen from that moment — see
+      immutability.what_may_change.phase_once_SUPERSEDED.
+
+      A supersession that could be quietly undone would be a silent replacement
+      of the historical record (immutable principle 8) and would destroy the
+      ability to reconstruct what replaced what (immutable principle 5).
+
+    by_superseding_status:
+      PROPOSED:     cannot cause target supersession
+      UNDER_REVIEW: cannot cause target supersession
+      APPROVED:     "MAY cause the target Decision to become SUPERSEDED — only if it carries supersedes: [target]"
+      REJECTED:     cannot cause target supersession
+      WITHDRAWN:    cannot cause target supersession
+      SUPERSEDED:   cannot cause target supersession
+
+    approved_without_supersedes: >
+      An APPROVED Decision that does NOT carry `supersedes: [A]` cannot cause A
+      to become SUPERSEDED, however closely related the two appear. This is the
+      defect corrected in 1.2.
+
+    why: >
+      Without these rules an unapproved record could retire an approved one, or
+      an approved but unrelated record could be pointed at after the fact to
+      justify a retirement the authority never sanctioned. Either achieves by
+      supersession exactly what the invalid APPROVED -> REJECTED transition
+      forbids — a silent replacement (immutable principle 8) and a route around
+      human authority (immutable principle 4).
+
+      The check is on STATUS and on the RECORDED RELATIONSHIP, not on identity.
+      It needs no identity model: what must be true is that the superseding
+      record was approved and that its approved content names the record it
+      replaces.
+
+    cardinality: >
+      NOT SPECIFIED, and deliberately not decided here. Whether one Decision may
+      be effectively superseded by more than one approved successor, and how
+      precedence between them would work, remains an open question. `supersedes`
+      and `superseded_by` remain lists; no cardinality constraint and no
+      precedence rule was invented. See open_questions.
+
+  supersedes_is_approved_content: >
+    `supersedes` is part of what the authority approves. Once B is APPROVED it
+    MUST NOT be added, removed, redirected, expanded, or reduced.
+
+    Changing the intended predecessor requires a NEW Decision. An
+    already-approved Decision is never modified in place to point somewhere
+    else — that would retroactively alter what was approved.
+
+  not_implemented:
+    automatic_supersession: >
+      NOT IMPLEMENTED. Nothing marks a Decision superseded, propagates the
+      reverse reference, or verifies that the pairing is consistent.
+    effective_supersession_enforcement: >
+      NOT IMPLEMENTED. Nothing checks the status of a superseding Decision,
+      that the reciprocal reference exists, or that a frozen field stayed
+      frozen. These are declarative contract invariants, not executable
+      machinery, and no atomic-transaction mechanism was introduced.
+
+# ---------------------------------------------------------------------------
+# CONVENTIONS
+# ---------------------------------------------------------------------------
+
+conventions:
+
+  minimalism: >
+    Seven fields are unconditionally required. Approval fields are NOT among
+    them: a newly proposed Decision has not been approved, and requiring
+    approval metadata on it would make the contract unusable for the case it
+    exists to serve.
+
+  conditional_requirement: >
+    Three fields are CONDITIONALLY required: whether they must be present
+    depends on the record's lifecycle status rather than being always or never
+    required.
+
+      approved_by, approved_at — see approval_provenance_rules
+      superseded_by            — see
+                                 immutability.what_may_change.transition_is_indivisible
+
+  phase_dependent_mutability: >
+    Mutability after approval depends on the record's PHASE, not only on which
+    field it is. A field permitted to change while APPROVED may be frozen once
+    SUPERSEDED. See immutability.what_may_change.
+
+  omission_semantics: >
+    An omitted optional field means NOT RECORDED / UNKNOWN. It does not mean
+    zero, false, or any default value. This contract defines NO default values.
+    In particular, an absent approved_by does NOT mean "approved by whoever
+    created the record".
+
+  timestamps: >
+    Timestamps are ISO 8601 with an explicit UTC offset. Formatting convention
+    only; no clock authority or ordering guarantee is defined.
+
+  references: >
+    Reference semantics are defined once, in README.md ("Reference policy").
+    That is the authoritative statement; this contract's addition is effective
+    supersession, which is the standing exception to the generic
+    no-reciprocity default — see supersession.effective_supersession.
+
+    In summary as it applies here: every relationship field on a Decision
+    already points at a formalized record type and uses its canonical id
+    (TASK, INV, EVD, DEC). Nothing resolves a reference, a reference that does
+    not resolve does not invalidate the record, references are project-local,
+    and cross-project resolution is NOT IMPLEMENTED.
+
+    A Decision may also cite a hypothesis using the canonical fragment syntax
+    INV-YYYY-NNNN#Hn defined by the Investigation contract.
+
+  extensibility: >
+    Fields not defined in this contract must not be added silently. An
+    unrecognized field is a contract violation, not an extension point. Adding
+    a field requires a recorded decision by the human authority.
+
+  no_state_history: >
+    A Decision record carries its current state only. No transition log and no
+    version history tooling.
+
+# ---------------------------------------------------------------------------
+# IDENTITY
+# ---------------------------------------------------------------------------
+
+id_format:
+  pattern: "DEC-YYYY-NNNN"
+  regex: "^DEC-[0-9]{4}-[0-9]{4}$"
+  components:
+    YYYY: four-digit year
+    NNNN: zero-padded sequence number, sequential within the project decision namespace
+  examples:
+    - DEC-2026-0001
+    - DEC-2026-0042
+  generation: >
+    NOT IMPLEMENTED. Automatic ID allocation is deliberately out of scope. Who
+    allocates the next number, and how collisions are prevented, is
+    NOT SPECIFIED.
+  sequence_exhaustion: >
+    NOT SPECIFIED. The behavior beyond 9999 records in one year has no defined
+    answer.
+
+# ---------------------------------------------------------------------------
+# STORAGE AND RECORD FORMAT
+# ---------------------------------------------------------------------------
+
+storage:
+
+  location: ".ai/decisions/"
+  description: >
+    Decision records belong in the `.ai/decisions/` directory of a project's AI
+    context. See ../templates/project/README.md.
+
+  file_naming:
+    pattern: ".ai/decisions/DEC-YYYY-NNNN.md"
+    regex: "^\\.ai/decisions/DEC-[0-9]{4}-[0-9]{4}\\.md$"
+    rule: >
+      The filename MUST equal the Decision id, with the .md extension. A record
+      whose filename and id disagree is invalid; neither one silently wins.
+    example: ".ai/decisions/DEC-2026-0001.md"
+
+  discovery: >
+    Records are found by their filename, which is the id. Nothing indexes,
+    lists, caches, or queries them.
+
+record_format:
+
+  canonical: Markdown document with YAML frontmatter
+  extension: ".md"
+  example: ../templates/decision/decision.md
+
+  authority: >
+    Machine-authoritative metadata lives in the YAML frontmatter. The structured
+    decision record and its narrative live in the Markdown body.
+
+    Every field defined in this contract lives in the frontmatter and is
+    validated against it. Where body and frontmatter appear to disagree, the
+    frontmatter governs.
+
+  body_carries_the_governance_record: >
+    As with Investigation, the substance lives in the body: authority,
+    alternatives, objections, the selected decision, rationale, and risks. These
+    are NOT contract fields, so there is nothing for them to contradict.
+
+  no_second_authoritative_copy: >
+    A field that IS in the frontmatter must not have a second authoritative copy
+    in the body. The body must not restate the record's own id, its status, its
+    question, an approval value, or a timestamp as though it were the record.
+    Narrative explanation of any of them is allowed.
+
+  reference_citations_are_not_duplication: >
+    Evidence, Investigation, and hypothesis ids DO appear in the body, and must:
+    an alternative cites the evidence bearing on it and an objection cites the
+    evidence it rests on. The frontmatter lists are the decision-level roll-up;
+    the body citations are per-alternative and per-objection.
+
+# ---------------------------------------------------------------------------
+# REQUIRED FIELDS
+# ---------------------------------------------------------------------------
+
+required_fields:
+  - schema_version
+  - id
+  - title
+  - status
+  - question
+  - created_at
+  - created_by
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+
+fields:
+
+  # --- identity -----------------------------------------------------------
+
+  schema_version:
+    type: string
+    required: true
+    allowed_values: ["1.2"]
+    description: >
+      The version of this contract that the record conforms to. Carried on the
+      record so a future validator can select the correct contract.
+      Migration of records written against an earlier version is
+      NOT IMPLEMENTED.
+
+  id:
+    type: string
+    required: true
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: Unique identifier. See id_format.
+    example: DEC-2026-0001
+
+  title:
+    type: string
+    required: true
+    description: >
+      A short, human-scannable label. One line. It is NOT the decision — a
+      record in PROPOSED has a title and no decision at all.
+    example: Sequencing of authentication failure remediation
+
+  question:
+    type: string
+    required: true
+    description: >
+      The decision question: what has to be settled, stated as a question and
+      not as its answer.
+
+      "Should the middleware configuration be changed immediately, or should
+      reproduction tests be performed first?" is a question. "Perform
+      reproduction tests first" is an answer and does not belong here.
+
+  # --- lifecycle ----------------------------------------------------------
+
+  status:
+    type: enum
+    required: true
+    allowed_values:
+      - PROPOSED
+      - UNDER_REVIEW
+      - APPROVED
+      - REJECTED
+      - SUPERSEDED
+      - WITHDRAWN
+    meanings:
+      PROPOSED: A decision proposal exists but formal review has not completed.
+      UNDER_REVIEW: The proposal is actively being evaluated, challenged, or revised.
+      APPROVED: The decision has been accepted by the applicable authority.
+      REJECTED: The proposal was considered and explicitly rejected.
+      SUPERSEDED: An approved decision has been replaced by a later decision.
+      WITHDRAWN: The proposal was intentionally withdrawn before approval.
+    description: >
+      Lifecycle position, and the machine-readable answer to "does this record
+      carry authority?" — only APPROVED does.
+
+      status is NOT which alternative won. Which course was selected is
+      narrative, in the "## Selected decision" section.
+
+  # --- approval provenance ------------------------------------------------
+  #
+  # Optional. Relevant only when status is APPROVED.
+
+  approved_by:
+    type: string
+    required: conditional
+    description: >
+      Who approved the Decision. An OPAQUE IDENTIFIER — no identity system
+      exists, nothing resolves or verifies it, and identity must not be
+      inferred from a display name.
+
+      CONDITIONALLY REQUIRED — see approval_provenance_rules. Mandatory when
+      status is APPROVED or SUPERSEDED; must be absent otherwise.
+
+      This field is NEVER populated automatically. A model-generated
+      recommendation does not count as approval and must not be written here
+      (immutable principle 7). An absent value does not mean the record's
+      creator approved it.
+
+      Recording who approved is NOT the same as establishing that they were
+      authorized. Authority rests with the human authority and is not record
+      data — see authority.
+
+  approved_at:
+    type: string
+    required: conditional
+    format: ISO 8601 UTC
+    description: >
+      When the approval was granted. CONDITIONALLY REQUIRED — see
+      approval_provenance_rules. Mandatory when status is APPROVED or
+      SUPERSEDED; must be absent otherwise.
+    example: "2026-08-17T15:20:00Z"
+
+  # --- relationships ------------------------------------------------------
+  #
+  # All optional. All opaque strings.
+
+  task:
+    type: string
+    required: false
+    pattern: "^TASK-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Task this Decision arose under. Task has a contract
+      (task.schema.yaml); the reference is opaque and unresolved.
+
+  investigation:
+    type: string
+    required: false
+    pattern: "^INV-[0-9]{4}-[0-9]{4}$"
+    description: >
+      The Investigation that informed this Decision. Investigation has a
+      contract (investigation.schema.yaml).
+
+      A Decision may also cite a SPECIFIC HYPOTHESIS in the body, using the
+      canonical composed format INV-YYYY-NNNN#Hn — for example
+      INV-2026-0001#H3. That format is defined by the Investigation contract
+      and is unchanged here. Reference resolution is NOT IMPLEMENTED.
+
+  evidence:
+    type: list[string]
+    required: false
+    pattern: "^EVD-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Evidence records bearing on this Decision. Opaque references — content is
+      never copied here and never modified. See evidence_independence.
+
+  related_decisions:
+    type: list[string]
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: Other Decisions related to this one. The relation is untyped.
+
+  supersedes:
+    type: list[string]
+    required: false
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Decisions this one replaces. The forward view of the supersession
+      relationship.
+
+      May be recorded at ANY status — a proposal may declare intended
+      supersession, which supersedes nothing on its own.
+
+      FROZEN once this Decision is APPROVED: it is part of the approved content
+      and must not be added, removed, redirected, expanded, or reduced. See
+      supersession.supersedes_is_approved_content.
+
+  superseded_by:
+    type: list[string]
+    required: conditional
+    pattern: "^DEC-[0-9]{4}-[0-9]{4}$"
+    description: >
+      Decisions that replace this one. The reverse view of the supersession
+      relationship.
+
+      CONDITIONALLY REQUIRED: MUST BE PRESENT when status is SUPERSEDED, and
+      MUST BE ABSENT for every other status. The status change and this field
+      are one indivisible act — see
+      immutability.what_may_change.transition_is_indivisible.
+
+      Populating it does not by itself change this record's status, and it is
+      valid only when the referenced Decision is APPROVED and carries
+      `supersedes` naming this record.
+
+      FROZEN once this Decision is SUPERSEDED: it cannot be removed,
+      redirected, replaced, or have its cardinality changed. See
+      supersession.effective_supersession.monotonic.
+
+  # --- provenance ---------------------------------------------------------
+
+  created_at:
+    type: string
+    required: true
+    format: ISO 8601 UTC
+    description: When the Decision record was created.
+    example: "2026-08-17T10:00:00Z"
+
+  updated_at:
+    type: string
+    required: false
+    format: ISO 8601 UTC
+    description: >
+      When the record was last changed. Omitted means unchanged since creation,
+      or the change was not recorded.
+
+  created_by:
+    type: string
+    required: true
+    description: >
+      Who or what created the record. An OPAQUE IDENTIFIER.
+
+      Creating a Decision record confers NO authority over it. The creator is
+      not thereby the proposer, the approver, or the authority — see authority.
+
+# ---------------------------------------------------------------------------
+# APPROVAL PROVENANCE RULES
+# ---------------------------------------------------------------------------
+#
+# D1. approved_by and approved_at are CONDITIONALLY REQUIRED: whether they must
+# be present depends on the record's lifecycle status.
+#
+# They are not the only conditionally required fields in this contract —
+# superseded_by is conditional too (see
+# immutability.what_may_change.transition_is_indivisible). The full list is in
+# conventions.conditional_requirement.
+
+approval_provenance_rules:
+
+  fields: [approved_by, approved_at]
+
+  by_lifecycle_status:
+    PROPOSED:
+      requirement: MUST BE ABSENT
+      note: Nothing has been approved. Approval metadata on a proposal is a false claim.
+    UNDER_REVIEW:
+      requirement: MUST BE ABSENT
+      note: >
+        Review is not approval. A record under review has not been accepted,
+        and recording an approver while it is being challenged would assert an
+        outcome that has not happened.
+    APPROVED:
+      requirement: MUST BE PRESENT
+      note: >
+        An approved Decision states who approved it and when. A decision
+        without provenance is incomplete (immutable principle 3), and an
+        unattributed approval is indistinguishable from an agent approving its
+        own recommendation (immutable principle 7).
+    REJECTED:
+      requirement: MUST BE ABSENT
+      note: A rejected proposal was never approved.
+    WITHDRAWN:
+      requirement: MUST BE ABSENT
+      note: A withdrawn proposal was never approved.
+    SUPERSEDED:
+      requirement: MUST BE PRESENT
+      note: >
+        A superseded Decision WAS approved before it was replaced. Its approval
+        provenance must survive supersession — erasing it would destroy the
+        record of who authorized the course that was actually taken at the
+        time (immutable principle 5).
+
+  both_or_neither: >
+    The two fields move together. A record carrying one without the other is
+    invalid in either direction: an approver with no time, or a time with no
+    approver, is incomplete provenance.
+
+  what_this_does_not_establish: >
+    These fields record THAT approval occurred and BY WHOM it was claimed. They
+    do not establish that the approver was authorized. Authority rests with the
+    human authority and is not represented in this contract — see authority.
+    Nothing resolves, verifies, or authenticates the identifier.
+
+  enforcement: >
+    NOT IMPLEMENTED. Nothing checks that an APPROVED record carries approval
+    provenance, or that a PROPOSED record lacks it.
+
+# ---------------------------------------------------------------------------
+# LIFECYCLE
+# ---------------------------------------------------------------------------
+
+lifecycle:
+
+  states: [PROPOSED, UNDER_REVIEW, APPROVED, REJECTED, SUPERSEDED, WITHDRAWN]
+  initial_state: PROPOSED
+  terminal_states: [REJECTED, SUPERSEDED, WITHDRAWN]
+
+  transitions:
+    PROPOSED:     [UNDER_REVIEW, WITHDRAWN, REJECTED]
+    UNDER_REVIEW: [PROPOSED, APPROVED, REJECTED, WITHDRAWN]
+    APPROVED:     [SUPERSEDED]
+    REJECTED:     []
+    SUPERSEDED:   []
+    WITHDRAWN:    []
+
+  invalid_transitions:
+    - REJECTED -> APPROVED
+    - WITHDRAWN -> APPROVED
+    - SUPERSEDED -> APPROVED
+    - APPROVED -> PROPOSED
+    - APPROVED -> UNDER_REVIEW
+    - APPROVED -> REJECTED
+    - APPROVED -> WITHDRAWN
+
+  approval_requires_review: >
+    APPROVED is reachable ONLY from UNDER_REVIEW. A proposal cannot be approved
+    without having been reviewed — PROPOSED -> APPROVED is not a transition.
+
+  under_review_may_return: >
+    UNDER_REVIEW -> PROPOSED is valid: review can send a proposal back to be
+    revised without rejecting it.
+
+  approved_is_not_terminal: >
+    APPROVED is not a terminal state, but its only exit is SUPERSEDED, and that
+    is reached by a LATER Decision replacing it. See immutability.
+
+  transition_preconditions:
+    APPROVED -> SUPERSEDED: >
+      Valid ONLY when a superseding Decision B satisfies all three effective
+      supersession conditions: B.status is APPROVED, B.supersedes contains this
+      record, and this record acquires superseded_by containing B as part of
+      the same act. See supersession.effective_supersession.
+
+      An unapproved record cannot retire an approved one, and an approved but
+      unrelated record cannot either — approval of B is only approval of B AS
+      THE REPLACEMENT FOR A when B's approved content says so.
+
+  status_change_does_not_license_rewriting: >
+    Moving to SUPERSEDED changes one status value and a reference. It does not
+    reopen the record. Everything outside immutability.what_may_change stays
+    frozen, including the entire body.
+
+  enforcement: >
+    NOT IMPLEMENTED. Transitions are documented, not enforced. Nothing prevents
+    an invalid transition, or an approval, from being written into a file.
+
+# ---------------------------------------------------------------------------
+# IMPLEMENTATION LIMITATIONS
+# ---------------------------------------------------------------------------
+
+limitations:
+
+  execution:
+    status: NOT IMPLEMENTED — AND OUT OF SCOPE
+    detail: >
+      A Decision record executes nothing. Approving one triggers no action,
+      schedules nothing, and permits nothing on its own. Execution will be
+      designed later.
+
+  decision_automation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing proposes, evaluates, approves, or decides automatically. No
+      voting, no quorum, no scoring, no automatic supersession.
+
+  approval_automation:
+    status: NOT IMPLEMENTED
+    detail: >
+      approved_by and approved_at are never populated automatically. There is
+      no approval interface and no approval workflow.
+
+  delegated_authority:
+    status: NOT IMPLEMENTED
+    detail: >
+      No delegation mechanism exists. See authority.delegation.
+
+  identity:
+    status: NOT IMPLEMENTED
+    detail: >
+      Contributors, authorities, and approvers are opaque identifiers. No
+      Identity schema exists.
+
+  model_routing:
+    status: NOT IMPLEMENTED
+    detail: >
+      This contract selects no model and assigns no work.
+
+  validation:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing validates a record, allocates ids, enforces transitions, checks
+      that a filename matches its id, or verifies that an APPROVED record
+      carries approval provenance.
+
+  reference_resolution:
+    status: NOT IMPLEMENTED
+    detail: >
+      Nothing resolves a Task, Evidence, Investigation, hypothesis, or Decision
+      reference. Cross-project resolution is undefined.
+
+  schema_migration:
+    status: NOT IMPLEMENTED
+    detail: >
+      No migration tooling, format, or procedure exists.
+
+# ---------------------------------------------------------------------------
+# OPEN ARCHITECTURAL QUESTIONS
+# ---------------------------------------------------------------------------
+#
+# Recorded, not resolved. Items marked PROPOSED — NOT APPROVED are gaps found
+# during implementation. They are NOT part of this contract and must not be
+# treated as binding or implemented.
+#
+# Resolved by the 1.1 amendment and therefore removed from this list:
+#   approval-provenance-conditionality - approved_by and approved_at are now
+#                                        conditionally required by status (D1)
+#
+# Resolved by the DEC11-03 documentation pass and therefore removed:
+#   cross-contract-stale-references - the Task, Evidence, and Investigation
+#     contracts now name Decision as an existing contract. The versioning
+#     ambiguity that had blocked the correction was ruled: a version represents
+#     semantic compatibility, not document revision count, so a
+#     documentation-only edit carries no bump. That correction changed no
+#     contract semantics and no version.
+#
+# Deliberately NOT resolved here: authority-machine-readability, materiality,
+# identity, delegation, alternative-numbering, and cross-contract reference
+# resolution. The D7 ruling on authority was made
+# separately and required no schema change; the open question below is left as
+# recorded rather than rewritten in this amendment.
+
+open_questions:
+
+  - id: superseding-decision-later-invalidated
+    question: >
+      If a Decision caused a target to become SUPERSEDED and is itself later
+      superseded, is the original target's SUPERSEDED status reconsidered?
+    matters_because: >
+      The 1.1 rule binds the EFFECT of supersession to the superseding
+      record being APPROVED at the time. It says nothing about what happens if
+      that record's own standing changes afterwards. A chain of supersessions
+      could therefore rest on a link that no longer carries force.
+    status: >
+      PARTIALLY RESOLVED by 1.2. Monotonicity settles the mechanical half: A's
+      `superseded_by` is frozen once A is SUPERSEDED, so nothing about B's later
+      standing can remove or redirect the recorded relationship, and no
+      reinstatement path exists.
+
+      What remains NOT SPECIFIED is the interpretive half: whether B later
+      being superseded should mean anything for A at all, or whether each link
+      simply stands on the standing it had at the time. 1.2 does not decide it.
+
+  - id: supersession-cardinality
+    question: >
+      May one Decision be effectively superseded by more than one approved
+      successor, and if so what precedence holds between them?
+    matters_because: >
+      `supersedes` and `superseded_by` are lists, so multiple successors are
+      structurally expressible. If two approved Decisions each supersede the
+      same predecessor, nothing says which one is in force.
+    status: >
+      NOT SPECIFIED — deliberately left open by 1.2. No cardinality constraint
+      was imposed and no precedence rule was invented. PROPOSED — NOT APPROVED:
+      a single-successor constraint, or a precedence rule. Neither is
+      implemented, and neither should be inferred from the reciprocity rule.
+
+  - id: authority-machine-readability
+    question: >
+      Should the authority be a frontmatter field rather than narrative only?
+    matters_because: >
+      "Who may approve this" cannot be read without opening the record and
+      parsing prose, so nothing can check that approved_by matches the stated
+      authority.
+    status: >
+      Implemented as approved — narrative. PROPOSED — NOT APPROVED: an
+      `authority` frontmatter field. Not implemented.
+
+  - id: alternative-numbering
+    question: >
+      Are A-numbers append-only, as hypothesis H-numbers are?
+    matters_because: >
+      If an alternative is withdrawn and its number reused, an external
+      reference or an objection citing A2 would silently come to mean a
+      different course of action — the same failure the Investigation contract
+      prohibits for H-numbers.
+    status: >
+      NOT SPECIFIED. PROPOSED — NOT APPROVED: an append-only rule for
+      A-numbers. Not implemented, and no cross-Decision reference format for
+      alternatives was defined.

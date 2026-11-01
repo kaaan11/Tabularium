@@ -1,0 +1,37 @@
+# Ortam degiskenleri ve gizli bilgiler
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+credentials.json
+
+# Bagimliliklar
+node_modules/
+venv/
+.venv/
+uv.lock
+__pycache__/
+*.py[cod]
+
+# Derleme ciktilari
+dist/
+build/
+*.egg-info/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code yerel ayarlari
+.claude/settings.local.json
+
+# Isletim sistemi
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Loglar
+*.log

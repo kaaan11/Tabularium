@@ -1,0 +1,77 @@
+# Example Task object — Tabularium Task contract, schema version 1.10
+#
+# Contract: tabularium/schemas/task.schema.yaml (in the Tabularium package)
+#
+# This file shows the Task fields on their own. The CANONICAL STORED FORM of a
+# Task is Markdown with YAML frontmatter — see task.md. Stored records live at
+# .ai/tasks/TASK-YYYY-NNNN.md, where the filename equals the id; this Task
+# would be .ai/tasks/TASK-2026-0001.md.
+#
+# This is an illustrative example, not a real Task and not a form to fill in.
+# Fields whose values are not known are OMITTED rather than filled with
+# placeholder text. An omitted field means NOT RECORDED, never a default.
+
+schema_version: "1.10"
+
+id: TASK-2026-0001
+type: DEBUGGING            # kind of work; see the closed vocabulary in the contract
+title: Investigate authentication failure
+objective: >
+  Determine why users are intermittently signed out shortly after a successful
+  login, and establish the cause with evidence. Producing a fix is not part of
+  this objective.
+
+project: example-service   # symbolic reference; Project schema NOT IMPLEMENTED
+
+priority: HIGH             # importance/urgency
+risk: MEDIUM               # potential impact of an incorrect action
+uncertainty_level: HIGH    # the cause is not yet understood
+
+status: IN_PROGRESS
+# archived_outcome is omitted because it is valid only when status is ARCHIVED.
+
+# --- scope: four distinct concepts ---------------------------------------
+
+plan: >
+  Reproduce the sign-out against a non-production environment, collect session
+  and token-expiry evidence from application logs, and compare behavior before
+  and after the most recent deployment.
+
+approval_required: true
+approval_status: APPROVED
+approved_by: human:user          # opaque identifier; only the human authority can approve
+approved_at: "2026-08-16T11:30:00Z"
+
+approved_scope:
+  approved_operations:
+    - read application source
+    - read non-production logs
+  approved_risk: MEDIUM
+  approved_plan: >
+    Read-only investigation in the non-production environment. No code changes,
+    no configuration changes, and no production access.
+  # approved_files is omitted: the approval bounded operations and risk, not a
+  # file list. Omission does NOT mean all files are approved.
+
+actual_changes: []   # read-only investigation; nothing has been changed
+
+# --- relationships --------------------------------------------------------
+
+questions:
+  - QST-2026-0001          # opaque canonical Question reference
+
+# parent_task, related_tasks, context_items, decisions, investigations,
+# evidence, handoffs, reports, and evaluations are omitted — none apply yet.
+
+# assigned_model is omitted: no model has been assigned. Model selection
+# belongs to the routing policy and registry, both unimplemented.
+
+# --- output ---------------------------------------------------------------
+
+# result, tests, and report are omitted: the Task is not complete.
+
+# --- provenance -----------------------------------------------------------
+
+created_at: "2026-08-16T09:15:00Z"
+updated_at: "2026-08-18T09:35:00Z"
+created_by: USER

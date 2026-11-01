@@ -1,0 +1,59 @@
+# Public-tree CI. GitHub runs only .github/workflows/; the export step installs
+# this file there. The private repository keeps its self-hosted workflow.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      # The sandboxed test runner needs bubblewrap. Ubuntu 24.04 restricts
+      # unprivileged user namespaces through AppArmor; lift that for the job.
+      - name: Install bubblewrap
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --ro-bind / / true
+      - name: Install with all extras
+        run: |
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv pip install --python .venv -e ".[api,runtime,observability,dev]"
+      - name: Full test suite
+        # Sandbox tests skip when bwrap is unusable; here that is a failure.
+        run: |
+          set -o pipefail
+          .venv/bin/python -m pytest tests -q -rs | tee pytest.log
+          ! grep -q "bwrap isolation unavailable" pytest.log
+
+  wheel:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build and install a non-editable wheel
+        run: |
+          uv build --wheel --python 3.12
+          uv venv --python 3.12 "$RUNNER_TEMP/wheel-venv"
+          uv pip install --python "$RUNNER_TEMP/wheel-venv" dist/*.whl 'pydantic>=2.9,<3'
+      - name: Check installed contracts without checkout imports
+        run: '"$RUNNER_TEMP/wheel-venv/bin/python" -I tests/wheel_smoke.py'
+
+  hygiene:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: No generated artifacts tracked
+        run: "! git ls-files | grep -E '(^|/)(__pycache__|build|dist)(/|$)|\\.pyc$|\\.egg-info'"
