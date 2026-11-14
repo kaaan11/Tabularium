@@ -244,4 +244,3 @@ def unsupported_diff_reason(raw_diff: str, parsed_count: int) -> str:
         if line.startswith(public_api._UNSUPPORTED_DIFF_MARKERS):
             return f"unsupported change: {line.strip()[:80]}"
     return ""
-

@@ -73,4 +73,3 @@ def select_change_worker(
         "No suitable worker available for --change: install the "
         "Codex CLI or OpenCode (--worker api cannot edit files).",
     )
-

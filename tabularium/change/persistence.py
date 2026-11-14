@@ -208,4 +208,3 @@ def persist_approved_change(
         )
 
     return product_result
-

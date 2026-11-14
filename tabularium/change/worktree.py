@@ -117,4 +117,3 @@ def compute_worktree_diff(worktree: Worktree, base_commit: str) -> str:
     return public_api._worktree_git(worktree, "diff", "--cached", "--no-ext-diff",
                                     "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/",
                                     base_commit, attr_source=base_commit)
-
