@@ -80,7 +80,10 @@ def hash_directory_bytes(root: Path) -> dict[str, str]:
 
 
 class FakeWorkerAdapter:
-    """Deterministic fake worker adapter that writes to its assigned cwd."""
+    """In-process fixture; change tests explicitly allow an unconfined worker.
+
+    OS containment is exercised with subprocess stubs in test_worker_isolation.
+    """
 
     def __init__(
         self,
@@ -225,7 +228,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Add comment to calculate_total",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
         )
 
@@ -266,7 +269,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Change to multiplication",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: False,
         )
 
@@ -302,7 +305,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Write environment secret",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=spy_confirm,
         )
 
@@ -332,7 +335,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Change two files",
             self.root,
             adapter=FakeWorkerAdapter(mutate_fn=mutate),
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=spy_confirm,
         )
 
@@ -353,7 +356,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Run on dirty project",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
         )
 
@@ -381,7 +384,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Apply change with concurrent edit",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
             pre_apply_hook=external_edit,
         )
@@ -400,7 +403,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
             "Crash worker",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
         )
 
@@ -422,7 +425,7 @@ class TestAcceptanceChangePath(ChangePathFixture):
                 "Non-interactive run",
                 self.root,
                 adapter=fake_worker,
-                change=True,
+                change=True, allow_unconfined_worker=True, allow_untested=True,
                 confirm=None,
             )
 
@@ -526,7 +529,7 @@ class TestChangePathVerificationHardening(ChangePathFixture):
             "Apply change, then tamper worktree",
             self.root,
             adapter=fake_worker,
-            change=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
             pre_apply_hook=tamper_worktree,
         )
@@ -576,7 +579,7 @@ class TestChangePathVerificationHardening(ChangePathFixture):
         with patch("tabularium.change_path.find_native_executable", return_value="/bin/true"), \
                 patch("tabularium.change_path.find_opencode_executable", return_value="/bin/true"), \
                 patch("tabularium.change_path.start_execution", side_effect=fake_start):
-            result = run_instruction("x", self.root, worker=worker_name, change=True,
+            result = run_instruction("x", self.root, worker=worker_name, change=True, allow_untested=True,
                                      confirm=lambda _: True)
             self.assertEqual(result.code, "WORKER_UNAVAILABLE")
         return seen["adapter"]

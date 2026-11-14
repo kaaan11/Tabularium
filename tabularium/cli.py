@@ -92,7 +92,15 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--persist", action="store_true",
                             help="propose and record an execution Report in .ai/reports upon completion")
     run_parser.add_argument("--change", action="store_true", default=False,
-                            help="allow worker to modify codebase via a governed worktree diff, security gate, and single human confirmation")
+                            help="allow worker to modify codebase via a governed worktree diff, security gate, and single human confirmation (native or opencode worker; --worker api is refused)")
+    run_parser.add_argument("--allow-untested", dest="allow_untested", action="store_true",
+                            default=False,
+                            help="with --change and no .ai/change.yaml: apply an untested "
+                                 "change for this run (recorded in the report and commit); "
+                                 "without it such a change is refused")
+    run_parser.add_argument("--allow-unconfined-worker", action="store_true",
+                            help="disable Tabularium worker containment for this --change run "
+                                 "(recorded in warnings, report and commit)")
     run_parser.add_argument("--workflow", default=None,
                             help="execution orchestration: single (default) or "
                                  "dag (governed multi-agent, DEC-2026-0010); "
@@ -118,6 +126,10 @@ def build_parser() -> argparse.ArgumentParser:
                                      "native worker")
     explain_parser.add_argument("--json", action="store_true",
                                 help="emit one machine-readable result object")
+    explain_parser.add_argument("--change", action="store_true",
+                                help="check test readiness for a change without executing or writing")
+    explain_parser.add_argument("--allow-untested", action="store_true",
+                                help="with --change: explicitly permit missing test configuration for this preflight")
     continue_parser = commands.add_parser(
         "continue", help="Continue pending Tabularium work",
         description="Continue the most recent pending governed execution.",
@@ -539,12 +551,16 @@ def _run_execution(args: argparse.Namespace) -> int:
                 args.instruction, args.path, task_id=args.task,
                 model=args.model, worker=args.worker,
                 workflow=getattr(args, "workflow", None),
+                change=getattr(args, "change", False),
+                allow_untested=getattr(args, "allow_untested", False),
                 command="dry-run"),
                 as_json=True)
         return _emit_explain(explain.preflight(
             args.instruction, args.path, task_id=args.task,
             model=args.model, worker=args.worker,
             workflow=getattr(args, "workflow", None),
+            change=getattr(args, "change", False),
+            allow_untested=getattr(args, "allow_untested", False),
             command="dry-run"),
             as_json=False)
     from tabularium.engine.workers.cli.transport import worker_env_passthrough
@@ -556,7 +572,9 @@ def _run_execution(args: argparse.Namespace) -> int:
     result = run_instruction(args.instruction, args.path, task_id=args.task,
                              model=args.model, worker=args.worker,
                              workflow=getattr(args, "workflow", None),
-                             change=getattr(args, "change", False))
+                             change=getattr(args, "change", False),
+                             allow_unconfined_worker=getattr(args, "allow_unconfined_worker", False),
+                             allow_untested=getattr(args, "allow_untested", False))
     # A --change result carries its own single decision and report; the
     # runtime approval sheet and --persist prompt do not apply to it.
     is_change = getattr(result, "change_result", None) is not None
@@ -599,7 +617,8 @@ def _emit_explain(result: explain.ExplainResult, as_json: bool) -> int:
 def _run_explain(args: argparse.Namespace) -> int:
     return _emit_explain(explain.preflight(
         args.instruction, args.path, task_id=args.task, model=args.model,
-        worker=args.worker, command="explain"), as_json=args.json)
+        worker=args.worker, change=args.change, allow_untested=args.allow_untested,
+        command="explain"), as_json=args.json)
 
 
 def _parse_args(parser: argparse.ArgumentParser, argv: list[str] | None) -> argparse.Namespace:

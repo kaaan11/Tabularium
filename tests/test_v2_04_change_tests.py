@@ -138,7 +138,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         res = run_instruction(
             path=self.root,
             instruction="Update a.py to new",
-            change=True,
+            change=True, allow_unconfined_worker=True,
             adapter=adapter,
             confirm=confirm,
         )
@@ -168,7 +168,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         res_fail = run_instruction(
             path=self.root,
             instruction="Update a.py again but test expects old",
-            change=True,
+            change=True, allow_unconfined_worker=True,
             adapter=adapter2,
             confirm=confirm,
         )
@@ -196,7 +196,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Mutate with broken test",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=confirm_mock,
             )
@@ -237,7 +237,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         res = run_instruction(
             path=self.root,
             instruction="Sleep in test",
-            change=True,
+            change=True, allow_unconfined_worker=True,
             adapter=adapter,
             confirm=lambda _: True,
         )
@@ -251,7 +251,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         self.assertTrue(res.change_result["tests"]["timed_out"])
 
     # 4. No configuration.
-    def test_04_no_config_warns_and_proceeds(self) -> None:
+    def test_04_explicit_untested_override_warns_and_proceeds(self) -> None:
         cfg = self.root / ".ai" / "change.yaml"
         if cfg.exists():
             cfg.unlink()
@@ -271,19 +271,20 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Apply without change.yaml",
-                change=True,
+                change=True, allow_unconfined_worker=True,
+                allow_untested=True,
                 adapter=adapter,
                 confirm=confirm,
             )
 
         self.assertEqual(res.status, "COMPLETED")
         self.assertEqual(len(confirm_called), 1)
-        expected_warning = "Tests: NOT RUN (no .ai/change.yaml)"
+        expected_warning = "Tests: NOT RUN (no .ai/change.yaml; untested change allowed by --allow-untested)"
         self.assertIn(expected_warning, res.warnings)
         self.assertIn(expected_warning, stdout_buf.getvalue())
 
         msg = self.get_last_commit_message()
-        self.assertIn("Tests: not configured", msg)
+        self.assertIn("Tests: not run (no .ai/change.yaml; --allow-untested)", msg)
         self.assertEqual(res.change_result["tests"]["status"], "NOT_CONFIGURED")
 
     # 5. Invalid configuration (at least one parameterized case per item)
@@ -313,7 +314,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
                 res = run_instruction(
                     path=self.root,
                     instruction="Run with invalid config",
-                    change=True,
+                    change=True, allow_unconfined_worker=True,
                     adapter=adapter,
                     confirm=lambda _: True,
                 )
@@ -337,7 +338,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Run with symlink config",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=lambda _: True,
             )
@@ -358,7 +359,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Run with dir config",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=lambda _: True,
             )
@@ -383,7 +384,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
                     instruction="Run with symlinked .ai dir",
                     execution_id="ex-direct-child",
                     checkpoint_path=str(self.root / ".execution"),
-                    adapter=adapter,
+                    allow_unconfined_worker=True, adapter=adapter,
                     confirm=lambda _: True,
                 )
                 self.assertEqual(res.status, "REFUSED")
@@ -405,7 +406,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Run with non-utf8 config",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=lambda _: True,
             )
@@ -434,7 +435,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Run when bwrap is missing",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=confirm_mock,
             )
@@ -457,7 +458,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Run with unsupported tree",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=lambda _: True,
             )
@@ -488,7 +489,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         res = run_instruction(
             path=self.root,
             instruction="Tamper with change.yaml",
-            change=True,
+            change=True, allow_unconfined_worker=True,
             adapter=adapter,
             confirm=lambda _: True,
         )
@@ -514,7 +515,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         res = run_instruction(
             path=self.root,
             instruction="Concurrent edit during confirm",
-            change=True,
+            change=True, allow_unconfined_worker=True,
             adapter=adapter,
             confirm=concurrent_mutating_confirm,
         )
@@ -536,7 +537,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
             res = run_instruction(
                 path=self.root,
                 instruction="Non interactive run",
-                change=True,
+                change=True, allow_unconfined_worker=True,
                 adapter=adapter,
                 confirm=None,
             )
@@ -605,7 +606,7 @@ class TestTerminalSanitizationWiring(ChangeTestsFixture):
         )
         out = io.StringIO()
         with patch("sys.stdout", out):
-            res = run_instruction(path=self.root, instruction="Escape in test output", change=True,
+            res = run_instruction(path=self.root, instruction="Escape in test output", change=True, allow_unconfined_worker=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a),
                                   confirm=lambda _: True)
         self.assertEqual(res.code, ISOLATED_TESTS_FAILED)
@@ -623,7 +624,7 @@ class TestTerminalSanitizationWiring(ChangeTestsFixture):
         out = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value="n"):
-            res = run_instruction(path=self.root, instruction="Escape in diff", change=True,
+            res = run_instruction(path=self.root, instruction="Escape in diff", change=True, allow_unconfined_worker=True, allow_untested=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=None)
         self.assertEqual(res.code, "APPROVAL_REJECTED", res.message)
         printed = out.getvalue()
@@ -654,7 +655,7 @@ class TestRelativeTestCommand(ChangeTestsFixture):
             'test_command: [".venv/bin/python", "-c", '
             f'"import sys, pkg.a; assert sys.prefix == \'{self.root}/.venv\', sys.prefix; '
             'assert pkg.a.get_value() == \'venv\'"]\n')
-        res = run_instruction(path=self.root, instruction="Use project venv", change=True,
+        res = run_instruction(path=self.root, instruction="Use project venv", change=True, allow_unconfined_worker=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         self.assertEqual(res.status, "COMPLETED", res.message)
         self.assertEqual(res.change_result["tests"]["status"], "PASSED")
@@ -672,7 +673,7 @@ class TestRelativeTestCommand(ChangeTestsFixture):
             (wt / "pkg" / "a.py").write_text("def get_value():\n    return 'patched'\n")
 
         self.write_change_yaml('test_command: ["./run_tests.sh"]\n')
-        res = run_instruction(path=self.root, instruction="Patch a", change=True,
+        res = run_instruction(path=self.root, instruction="Patch a", change=True, allow_unconfined_worker=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         self.assertEqual(res.status, "COMPLETED", res.message)
 
@@ -709,7 +710,7 @@ class TestDiffPreviewAndChangeConfigHardening(ChangeTestsFixture):
         out = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value="n"):
-            res = run_instruction(path=self.root, instruction="Bidi in diff", change=True,
+            res = run_instruction(path=self.root, instruction="Bidi in diff", change=True, allow_unconfined_worker=True, allow_untested=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=None)
         self.assertEqual(res.code, "APPROVAL_REJECTED", res.message)
         self.assertNotIn("\u202e", out.getvalue())
@@ -739,7 +740,7 @@ class TestDiffPreviewAndChangeConfigHardening(ChangeTestsFixture):
         out = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value="y"):
-            res = run_instruction(path=self.root, instruction="Interactive yes", change=True,
+            res = run_instruction(path=self.root, instruction="Interactive yes", change=True, allow_unconfined_worker=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=None)
         self.assertEqual(res.status, "COMPLETED", res.message)
         self.assertIn("Tests: PASSED", out.getvalue())
@@ -756,7 +757,7 @@ class TestDiffPreviewAndChangeConfigHardening(ChangeTestsFixture):
                            capture_output=True)
             return True
 
-        res = run_instruction(path=self.root, instruction="Race with a commit", change=True,
+        res = run_instruction(path=self.root, instruction="Race with a commit", change=True, allow_unconfined_worker=True, allow_untested=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=confirm_after_commit)
         self.assertEqual(res.code, TARGET_CHANGED, res.message)
         self.assertIn("return 'old'", (self.root / "pkg" / "a.py").read_text())
@@ -771,7 +772,7 @@ class TestDiffPreviewAndChangeConfigHardening(ChangeTestsFixture):
             self.write_change_yaml(f'test_command: ["{PY}", "-c", "print(2)"]\n')
             return True
 
-        res = run_instruction(path=self.root, instruction="Config edited", change=True,
+        res = run_instruction(path=self.root, instruction="Config edited", change=True, allow_unconfined_worker=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=confirm_after_config_edit)
         self.assertEqual(res.code, TARGET_CHANGED, res.message)
         self.assertIn("return 'old'", (self.root / "pkg" / "a.py").read_text())
@@ -805,7 +806,7 @@ class TestChangeConfigDuplicateKeysAndCopyErrors(ChangeTestsFixture):
         self.write_change_yaml(f'test_command: ["{PY}", "-c", "print(1)"]\n')
         confirm = MagicMock(return_value=True)
         with patch("tabularium.change_path.run_tests_on_copy", side_effect=OSError(28, "No space left on device")):
-            res = run_instruction(path=self.root, instruction="Disk full", change=True,
+            res = run_instruction(path=self.root, instruction="Disk full", change=True, allow_unconfined_worker=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=confirm)
         self.assertEqual(res.status, "REFUSED")
         self.assertEqual(res.code, SANDBOX_UNAVAILABLE)
@@ -849,7 +850,7 @@ class TestIsolatedTestExecutionHardening(ChangeTestsFixture):
             script.chmod(0o755)
 
         confirm = MagicMock(return_value=True)
-        res = run_instruction(path=self.root, instruction="Add a script", change=True,
+        res = run_instruction(path=self.root, instruction="Add a script", change=True, allow_unconfined_worker=True, allow_untested=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate), confirm=confirm)
         self.assertEqual(res.status, "REFUSED")
         self.assertEqual(res.code, "DIFF_UNSUPPORTED", res.message)
@@ -872,7 +873,7 @@ class TestIsolatedTestExecutionHardening(ChangeTestsFixture):
         self.write_change_yaml(f'test_command: ["{PY}", "-c", "print(1)", "\\e[2J"]\n')
         out = io.StringIO()
         with patch("sys.stdout", out):
-            run_instruction(path=self.root, instruction="Escape in command", change=True,
+            run_instruction(path=self.root, instruction="Escape in command", change=True, allow_unconfined_worker=True,
                             adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: False)
         self.assertIn("Running tests in an isolated copy:", out.getvalue())
         self.assertNotIn("\x1b", out.getvalue())
@@ -890,7 +891,7 @@ class TestIsolatedTestExecutionHardening(ChangeTestsFixture):
         self.write_change_yaml(
             f'test_command: ["/bin/sh", "-c", "sleep 30 & sleep 30 & wait"]\ntimeout_seconds: 2\n')
         t0 = time.monotonic()
-        res = run_instruction(path=self.root, instruction="Children", change=True,
+        res = run_instruction(path=self.root, instruction="Children", change=True, allow_unconfined_worker=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         self.assertEqual(res.code, ISOLATED_TESTS_FAILED)
         self.assertLess(time.monotonic() - t0, 10.0)
@@ -904,7 +905,7 @@ class TestIsolatedTestExecutionHardening(ChangeTestsFixture):
 
         self.write_change_yaml(f'test_command: ["{PY}", "-c", "print(1)"]\n')
         with patch("tabularium.change_path.run_tests_on_copy", side_effect=OSError(28, "No space left")):
-            run_instruction(path=self.root, instruction="Record reason", change=True,
+            run_instruction(path=self.root, instruction="Record reason", change=True, allow_unconfined_worker=True,
                             adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         results = [read_frontmatter(tf, self.root, "Task").frontmatter
                    for tf in (self.root / ".ai" / "tasks").glob("*.md")]
@@ -939,7 +940,7 @@ class TestIsolatedTestSecurityHardening(ChangeTestsFixture):
         self.write_change_yaml(f'test_command: ["{PY}", "-c", "print(1)"]\n')
         with patch.object(cp, "apply_preflight_reason", side_effect=preflight_then_tamper), \
              patch.object(cp, "run_tests_on_copy", side_effect=tests_then_restore):
-            res = run_instruction(path=self.root, instruction="Race the overlay", change=True,
+            res = run_instruction(path=self.root, instruction="Race the overlay", change=True, allow_unconfined_worker=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         self.assertEqual(seen.get("pkg/a.py"), good)
         # The worktree no longer matches the approved diff, so nothing is applied.
@@ -955,7 +956,7 @@ class TestIsolatedTestSecurityHardening(ChangeTestsFixture):
         hook.chmod(0o755)
         err = io.StringIO()
         with patch("sys.stderr", err):
-            res = run_instruction(path=self.root, instruction="Hook fails", change=True,
+            res = run_instruction(path=self.root, instruction="Hook fails", change=True, allow_unconfined_worker=True, allow_untested=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         self.assertEqual(res.status, "COMPLETED", res.message)
         self.assertIn("not committed", err.getvalue())
@@ -979,7 +980,7 @@ class TestIsolatedTestSecurityHardening(ChangeTestsFixture):
 
         self.write_change_yaml(f'test_command: ["{PY}", "-c", "print(1)"]\n')
         with patch("tabularium.change_path.run_tests_on_copy") as runner:
-            res = run_instruction(path=self.root, instruction="Tamper", change=True,
+            res = run_instruction(path=self.root, instruction="Tamper", change=True, allow_unconfined_worker=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate), confirm=lambda _: True)
         self.assertEqual(res.status, "REFUSED")
         runner.assert_not_called()
