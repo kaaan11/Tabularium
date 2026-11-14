@@ -60,7 +60,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
         adapter = FakeWorkerAdapter(mutate_fn=_mutate)
         calls: list[str] = []
         tasks, head = self._tasks(), self._head()
-        res = run_instruction("Update a.py", self.root, adapter=adapter, change=True,
+        res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True,
                               confirm=lambda p: calls.append(p) or True)
         self._assert_refused_before_worker(res, adapter, tasks, head, calls)
 
@@ -68,7 +68,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
         adapter = FakeWorkerAdapter(mutate_fn=_mutate)
         tasks, head = self._tasks(), self._head()
         with patch("sys.stdin", io.StringIO("")):
-            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True)
+            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True)
         self._assert_refused_before_worker(res, adapter, tasks, head, [])
 
     def test_explicit_override_applies_and_records_untested(self):
@@ -76,7 +76,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
         calls: list[str] = []
         out = io.StringIO()
         with patch("sys.stdout", out):
-            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True,
+            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True,
                                   allow_untested=True,
                                   confirm=lambda p: calls.append(p) or True)
         self.assertEqual(res.status, "COMPLETED")
@@ -102,7 +102,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
     def test_explicit_override_still_needs_interactive_approval(self):
         adapter = FakeWorkerAdapter(mutate_fn=_mutate)
         with patch("sys.stdin", io.StringIO("")):
-            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True,
+            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True,
                                   allow_untested=True)
         self.assertEqual(res.status, "AWAITING_APPROVAL")
         self.assertEqual((self.root / "pkg" / "a.py").read_text(),
@@ -110,7 +110,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
 
     def test_declined_approval_with_override_applies_nothing(self):
         adapter = FakeWorkerAdapter(mutate_fn=_mutate)
-        res = run_instruction("Update a.py", self.root, adapter=adapter, change=True,
+        res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True,
                               allow_untested=True, confirm=lambda _: False)
         self.assertEqual(res.code, "APPROVAL_REJECTED")
         self.assertTrue(res.change_result["tests"]["untested_override"])
@@ -123,7 +123,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
         passed = IsolatedRun(0, "", "", False, False)
         with patch("sys.stdout", io.StringIO()), \
                 patch("tabularium.change_path.run_tests_on_copy", return_value=passed) as runner:
-            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True,
+            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True,
                                   confirm=lambda _: True)
         self.assertEqual(res.status, "COMPLETED")
         runner.assert_called_once_with(
@@ -143,7 +143,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
         failed = IsolatedRun(1, "", "assertion failed", False, False)
         with patch("sys.stdout", io.StringIO()), \
                 patch("tabularium.change_path.run_tests_on_copy", return_value=failed) as runner:
-            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True,
+            res = run_instruction("Update a.py", self.root, adapter=adapter, change=True, allow_unconfined_worker=True,
                                   allow_untested=True,
                                   confirm=lambda p: calls.append(p) or True)
         self.assertEqual(res.code, "ISOLATED_TESTS_FAILED")
@@ -162,7 +162,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
                 patch("tabularium.change_path.run_tests_on_copy", return_value=passed) as runner:
             res = run_instruction("Update a.py", self.root,
                                   adapter=FakeWorkerAdapter(mutate_fn=_mutate),
-                                  change=True, allow_untested=True, confirm=lambda _: True)
+                                  change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(res.status, "COMPLETED")
         runner.assert_called_once()
         self.assertEqual(res.change_result["tests"]["status"], "PASSED")
@@ -175,7 +175,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
                 self.write_change_yaml(content)
                 adapter = FakeWorkerAdapter(mutate_fn=_mutate)
                 res = run_instruction("Update a.py", self.root, adapter=adapter,
-                                      change=True, allow_untested=True, confirm=lambda _: True)
+                                      change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _: True)
                 self.assertEqual(res.code, "CHANGE_CONFIG_INVALID")
                 self.assertEqual(adapter.call_count, 0)
 
@@ -192,7 +192,7 @@ class TestUntestedChangePolicy(ChangeTestsFixture):
                 calls = []
                 res = run_instruction("Update a.py", self.root,
                                       adapter=FakeWorkerAdapter(mutate_fn=_mutate),
-                                      change=True, allow_untested=True,
+                                      change=True, allow_unconfined_worker=True, allow_untested=True,
                                       confirm=lambda p: calls.append(p) or True)
                 self.assertEqual(res.code, code)
                 self.assertEqual(calls, [])

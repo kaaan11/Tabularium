@@ -1,11 +1,16 @@
-"""Run an untrusted test command against a disposable project copy under bubblewrap.
+"""Run untrusted test commands and coding workers under bubblewrap.
 
-The command sees an allowlisted read-only system (``/usr``, ``/etc``, ``/opt``
+The default test profile sees an allowlisted read-only system (``/usr``, ``/etc``, ``/opt``
 and the interpreter prefixes it needs), a private ``/tmp`` and the copy at
 ``/work``. It gets no network, no view of the operator's home or of the real
 project, and no inherited environment. Without a working ``bwrap`` nothing
 runs: callers get ``SANDBOX_UNAVAILABLE`` and must not fall back to an
 unconfined run.
+
+The worker profile (``worker_env`` supplied) uses the same launcher/status
+channel with a narrower runtime allowlist, a fresh home, and shared host
+network for provider calls. Only the worktree is host-backed and writable.
+See WORKER_SECURITY.md for the precise boundary and authentication limits.
 
 Known limits: the copy lives on the host disk and is not size-limited while
 the command runs; there is no CPU or memory limit beyond the timeout. The
@@ -25,6 +30,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -40,6 +46,11 @@ TMP_SIZE = 512 * 1024 * 1024
 READONLY_SUBPATHS = (".ai", "constitution")
 _SYSTEM_DIRS = ("/usr", "/etc", "/opt")
 _USR_LINKS = ("/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32")
+# Workers need provider egress, DNS and certificate verification, not all of
+# /etc (which can contain credentials) or /opt. No host CLI state is mounted.
+_WORKER_ETC = ("/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf",
+               "/etc/ld.so.cache", "/etc/ssl/certs", "/etc/ssl/openssl.cnf",
+               "/etc/localtime")
 _SKIP_DIRS = frozenset({".git", "__pycache__"})
 _GIT = ("git", "-c", "core.fsmonitor=false", "-c", "core.quotepath=false")
 
@@ -336,24 +347,43 @@ def _is_project_venv(path: str, project: str, tree: Path) -> bool:
 
 
 def bwrap_args(bwrap: str, tree: Path, command: list[str], *, hidden: tuple[Path, ...],
-               status_fd: int) -> list[str]:
+               status_fd: int, worker_env: dict[str, str] | None = None) -> list[str]:
     args = [bwrap, "--unshare-all", "--unshare-user", "--disable-userns",
             "--die-with-parent", "--new-session", "--clearenv"]
-    for d in _SYSTEM_DIRS:
+    worker = worker_env is not None
+
+    def check_worker_runtime(source: Path) -> None:
+        for secret in (*hidden, Path.home().resolve()):
+            common = os.path.commonpath([str(source), str(secret)])
+            if common in (str(source), str(secret)):
+                raise SandboxError(SANDBOX_UNAVAILABLE,
+                                   f"runtime path {source} overlaps hidden path {secret}")
+
+    if worker:
+        args += ["--share-net", "--cap-drop", "ALL"]
+    system_dirs = ("/usr", *_WORKER_ETC) if worker else _SYSTEM_DIRS
+    for d in system_dirs:
+        if worker and os.path.exists(d):
+            source = Path(d).resolve()
+            check_worker_runtime(source)
+            args += ["--ro-bind", str(source), d]
+            continue
         if os.path.isdir(d):
             args += ["--ro-bind", d, d]
     for link in _USR_LINKS:
         if os.path.islink(link):
             args += ["--symlink", os.readlink(link), link]
         elif os.path.isdir(link):
+            if worker:
+                check_worker_runtime(Path(link).resolve())
             args += ["--ro-bind", link, link]
     args += ["--dev", "/dev", "--proc", "/proc", "--size", str(TMP_SIZE), "--tmpfs", "/tmp",
              "--dir", "/tmp/home"]
     for secret in hidden:
-        if not _bindable(str(secret), "/nonexistent-home"):
+        if not worker and not _bindable(str(secret), "/nonexistent-home"):
             raise SandboxError(SANDBOX_UNAVAILABLE,
                                f"project {secret} lies under a system directory the sandbox exposes")
-    runtime = _runtime_paths(command)
+    runtime = [] if worker else _runtime_paths(command)
     for path, dest in runtime:
         # A prefix that contains the project would expose its unpatched
         # files. Inside the project only a real virtualenv the copy left
@@ -366,17 +396,38 @@ def bwrap_args(bwrap: str, tree: Path, command: list[str], *, hidden: tuple[Path
                 raise SandboxError(SANDBOX_UNAVAILABLE,
                                    f"interpreter path {path} overlaps the project; refusing to expose it")
         args += ["--ro-bind", path, dest]
+    if worker:
+        # A standalone CLI outside /usr is exposed as ONE read-only file,
+        # never its install directory, home, npm cache or Python prefix.
+        executable = shutil.which(command[0]) if not os.path.isabs(command[0]) else command[0]
+        if not executable or not Path(executable).is_file():
+            raise SandboxError(SANDBOX_UNAVAILABLE, "worker executable is not a regular file")
+        executable = str(Path(executable).resolve())
+        if not executable.startswith("/usr/"):
+            args += ["--ro-bind", executable, "/worker/cli"]
+            executable = "/worker/cli"
+        command = [executable, *(SANDBOX_ROOT if arg == str(tree) else arg for arg in command[1:])]
     args += ["--bind", str(tree), SANDBOX_ROOT]
     for sub in READONLY_SUBPATHS:
         inner = tree / sub
         if inner.is_dir() and not inner.is_symlink():
             args += ["--ro-bind", str(inner), f"{SANDBOX_ROOT}/{sub}"]
     bins = [f"{dest}/bin" for path, dest in runtime if os.path.isdir(f"{path}/bin")]
-    if command and os.path.isabs(command[0]):
+    if not worker and command and os.path.isabs(command[0]):
         bins.insert(0, os.path.dirname(command[0]))
     path_env = ":".join([*dict.fromkeys(bins), "/usr/local/bin", "/usr/bin", "/bin"])
     # src layout: the patched package must win over an installed copy.
     pythonpath = f"{SANDBOX_ROOT}/src:{SANDBOX_ROOT}" if (tree / "src").is_dir() else SANDBOX_ROOT
+    if worker:
+        for name, value in worker_env.items():
+            args += ["--setenv", name, value]
+        # These always win over the operator's environment passthrough.
+        for name, value in (("CODEX_HOME", "/tmp/home/.codex"),
+                            ("XDG_CONFIG_HOME", "/tmp/home/.config"),
+                            ("XDG_DATA_HOME", "/tmp/home/.local/share"),
+                            ("XDG_CACHE_HOME", "/tmp/home/.cache"),
+                            ("XDG_STATE_HOME", "/tmp/home/.local/state")):
+            args += ["--setenv", name, value]
     args += ["--remount-ro", "/", "--chdir", SANDBOX_ROOT,
              "--setenv", "PATH", path_env,
              "--setenv", "HOME", "/tmp/home",
@@ -405,24 +456,32 @@ def _drain(fd: int, limit: int, result: list) -> None:
 
 def run_isolated(tree: str | Path, command: list[str], *, hidden: tuple[str | Path, ...] = (),
                  timeout: float = DEFAULT_TIMEOUT,
-                 output_limit: int = DEFAULT_OUTPUT_LIMIT) -> IsolatedRun:
+                 output_limit: int = DEFAULT_OUTPUT_LIMIT,
+                 worker_env: dict[str, str] | None = None,
+                 stdin_text: str | None = None,
+                 cancel_event: threading.Event | None = None) -> IsolatedRun:
     """Run command with tree mounted read-write at /work; see the module limits.
 
     ``hidden`` names host paths (normally the real project) that must stay
     invisible; an interpreter prefix overlapping one of them is refused.
+    ``worker_env`` selects the worker profile, even when empty. It contains
+    only operator-authorized variables and controller-generated CLI controls.
+    Timeout or cancellation tears down the entire PID namespace.
     """
     if not command:
-        raise SandboxError(SANDBOX_UNAVAILABLE, "empty test command")
+        raise SandboxError(SANDBOX_UNAVAILABLE, "empty sandbox command")
     bwrap = find_bwrap()
     if bwrap is None:
-        raise SandboxError(SANDBOX_UNAVAILABLE, "bwrap is not installed; refusing to run tests unconfined")
+        raise SandboxError(SANDBOX_UNAVAILABLE, "bwrap is not installed; refusing to run unconfined")
     tree_path = Path(tree).resolve()
     hidden_paths = tuple(Path(h).resolve() for h in hidden)
     status_r, status_w = os.pipe()
     try:
-        args = bwrap_args(bwrap, tree_path, list(command), hidden=hidden_paths, status_fd=status_w)
+        args = bwrap_args(bwrap, tree_path, list(command), hidden=hidden_paths,
+                          status_fd=status_w, worker_env=worker_env)
         try:
-            proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            proc = subprocess.Popen(args, stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, env={"PATH": "/usr/bin:/bin"},
                                     pass_fds=(status_w,), start_new_session=True)
         except OSError as exc:
@@ -432,12 +491,31 @@ def run_isolated(tree: str | Path, command: list[str], *, hidden: tuple[str | Pa
         err: list = []
         readers = [threading.Thread(target=_drain, args=(proc.stdout.fileno(), output_limit, out), daemon=True),
                    threading.Thread(target=_drain, args=(proc.stderr.fileno(), output_limit, err), daemon=True)]
+        feeder = None
+        if stdin_text is not None:
+            def feed():
+                try:
+                    with proc.stdin:
+                        proc.stdin.write(stdin_text.encode("utf-8"))
+                except (OSError, ValueError):
+                    pass  # The worker may exit without consuming its prompt.
+            feeder = threading.Thread(target=feed, daemon=True)
         try:
             os.close(status_w)
             status_w = -1
             for reader in readers:
                 reader.start()
-            proc.wait(timeout=timeout)
+            if feeder:
+                feeder.start()
+            deadline = time.monotonic() + timeout
+            while proc.poll() is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or (cancel_event is not None and cancel_event.is_set()):
+                    raise subprocess.TimeoutExpired(args, timeout)
+                try:
+                    proc.wait(timeout=min(remaining, 0.1))
+                except subprocess.TimeoutExpired:
+                    continue
         except subprocess.TimeoutExpired:
             timed_out = True
             _kill(proc)
@@ -445,6 +523,8 @@ def run_isolated(tree: str | Path, command: list[str], *, hidden: tuple[str | Pa
             _kill(proc)
             raise
         finally:
+            if feeder:
+                feeder.join(timeout=10)
             for reader in readers:
                 reader.join(timeout=10)
             proc.stdout.close()
@@ -460,9 +540,11 @@ def run_isolated(tree: str | Path, command: list[str], *, hidden: tuple[str | Pa
                 os.close(fd)
     # bwrap reports exit-code only when the command really ran; a failed
     # mount, a missing executable or a non-bwrap binary leaves it out.
-    if "exit-code" not in statuses and not timed_out:
+    if "exit-code" not in statuses and (not timed_out or
+                                        (worker_env is not None and "child-pid" not in statuses)):
         raise SandboxError(SANDBOX_UNAVAILABLE,
-                           f"the test command did not start in the sandbox: {stderr.strip()[:500]}")
+                           f"command did not start in bwrap sandbox (usable Linux user/mount/PID namespaces "
+                           f"and bwrap --disable-userns/--json-status-fd are required): {stderr.strip()[:500]}")
     returncode = None if timed_out else statuses["exit-code"]
     return IsolatedRun(returncode=returncode, stdout=stdout, stderr=stderr,
                        timed_out=timed_out, truncated=cut_out or cut_err)
@@ -507,11 +589,12 @@ def run_tests_on_copy(project_root: str | Path, overlay: dict[str, str], command
         return run_isolated(tree, command, hidden=(root,), timeout=timeout, output_limit=output_limit)
 
 
-def probe_isolation(timeout: float = 30.0) -> tuple[bool, str]:
+def probe_isolation(timeout: float = 30.0, *, worker: bool = False) -> tuple[bool, str]:
     """Run ``true`` with the real profile; used by tests and callers, not doctor."""
     try:
         with tempfile.TemporaryDirectory(prefix="tabu-probe-") as scratch:
-            result = run_isolated(scratch, ["/usr/bin/true"], timeout=timeout)
+            result = run_isolated(scratch, ["/usr/bin/true"], timeout=timeout,
+                                  worker_env={} if worker else None)
     except SandboxError as exc:
         return False, exc.detail
     if not result.passed:

@@ -65,7 +65,7 @@ def _change_child(root: str, sync_dir: str, name: str, other: str) -> None:
     try:
         result = run_instruction(f"Change from {name}", root,
                                  adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                                 change=True, allow_untested=True, confirm=lambda _prompt: True)
+                                 change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _prompt: True)
         payload = {"status": result.status, "code": result.code,
                    "message": result.message, **observed}
     except BaseException as exc:  # reported, never swallowed silently
@@ -85,7 +85,7 @@ def _hanging_child(root: str, sync_dir: str) -> None:
 
     run_instruction("Change that is killed", root,
                     adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                    change=True, allow_untested=True, confirm=lambda _prompt: True)
+                    change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _prompt: True)
 
 
 def _task_holder_child(root: str, sync_dir: str) -> None:
@@ -206,7 +206,7 @@ class TestConcurrentChange(ProjectLockFixture):
                             "holder never reached its worker")
             # While the holder lives the project is busy.
             busy = run_instruction("Concurrent change", self.root,
-                                   adapter=FakeWorkerAdapter(), change=True,
+                                   adapter=FakeWorkerAdapter(), change=True, allow_unconfined_worker=True,
                                    confirm=lambda _prompt: True)
             self.assertEqual((busy.status, busy.code), ("REFUSED", "PROJECT_BUSY"))
             self.assertIn(f"pid {proc.pid}", busy.message)
@@ -227,7 +227,7 @@ class TestConcurrentChange(ProjectLockFixture):
             (worktree / "src" / "sample.py").write_text(new_content, encoding="utf-8")
 
         stale = run_instruction("Change after crash", self.root,
-                                adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True,
+                                adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True, allow_unconfined_worker=True,
                                 confirm=lambda _prompt: True)
         self.assertEqual((stale.status, stale.code), ("REFUSED", "PROJECT_LOCK_STALE"))
         self.assertIn(f"pid {proc.pid}", stale.message)
@@ -238,7 +238,7 @@ class TestConcurrentChange(ProjectLockFixture):
 
         # Refusing again is deterministic: nothing was cleared implicitly.
         again = run_instruction("Change after crash", self.root,
-                                adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True,
+                                adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True, allow_unconfined_worker=True,
                                 confirm=lambda _prompt: True)
         self.assertEqual(again.code, "PROJECT_LOCK_STALE")
 
@@ -247,7 +247,7 @@ class TestConcurrentChange(ProjectLockFixture):
         journal.write_text('{"interrupted": true}', encoding="utf-8")
         owner.unlink()
         interrupted = run_instruction("Change after crash", self.root,
-                                      adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True,
+                                      adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True, allow_unconfined_worker=True,
                                       confirm=lambda _prompt: True)
         self.assertEqual(interrupted.code, "INTERRUPTED_APPLY")
         self.assertIn(str(journal), interrupted.message)
@@ -260,7 +260,7 @@ class TestConcurrentChange(ProjectLockFixture):
         cancelled = task.task_transition(self.root, candidates[0].id, "CANCELLED", force=True)
         self.assertTrue(cancelled.updated, cancelled)
         recovered = run_instruction("Change after crash", self.root,
-                                    adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True,
+                                    adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True, allow_unconfined_worker=True,
                                     allow_untested=True, confirm=lambda _prompt: True)
         self.assertEqual((recovered.status, recovered.code), ("COMPLETED", "COMPLETED"),
                          recovered.message)
@@ -273,7 +273,7 @@ class TestConcurrentChange(ProjectLockFixture):
         self.assertTrue(_wait_for(lambda: (self.sync / "task.in").exists()))
         before = {p.name: p.read_bytes() for p in (self.root / ".ai" / "tasks").iterdir()}
         operations = [
-            lambda: run_instruction("Competing change", self.root, change=True,
+            lambda: run_instruction("Competing change", self.root, change=True, allow_unconfined_worker=True,
                                     adapter=FakeWorkerAdapter(), confirm=lambda _: True),
             lambda: run_instruction("Competing run", self.root, adapter=FakeWorkerAdapter()),
             lambda: continue_execution(self.root),
@@ -312,7 +312,7 @@ class TestConcurrentChange(ProjectLockFixture):
         try:
             self.assertTrue(_wait_for(lambda: (self.sync / "task.in").exists()))
             result = run_instruction("Linked change", linked, adapter=FakeWorkerAdapter(),
-                                     change=True, confirm=lambda _: True)
+                                     change=True, allow_unconfined_worker=True, confirm=lambda _: True)
             self.assertEqual(result.code, "PROJECT_BUSY", result)
         finally:
             (self.sync / "release").touch()
@@ -369,7 +369,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
                           side_effect=probe_before("commit", change_path.commit_applied_change)), \
              patch.object(change_path, "cleanup_worktree",
                           side_effect=probe_before("cleanup", change_path.cleanup_worktree)):
-            result = run_instruction("Probe all phases", self.root, change=True,
+            result = run_instruction("Probe all phases", self.root, change=True, allow_unconfined_worker=True,
                                      adapter=FakeWorkerAdapter(mutate_fn=mutate), confirm=confirm)
         self.assertEqual(result.code, "COMPLETED", result)
         self.assertEqual(list(dict.fromkeys(phases)),
@@ -383,7 +383,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
             self.assertEqual(contender.code, "PROJECT_BUSY", contender)
             (worktree / "src" / "sample.py").write_text("x = 1\n", encoding="utf-8")
 
-        result = run_instruction("Thread contention", self.root, change=True,
+        result = run_instruction("Thread contention", self.root, change=True, allow_unconfined_worker=True,
                                  adapter=FakeWorkerAdapter(mutate_fn=mutate),
                                  allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.code, "COMPLETED", result)
@@ -419,7 +419,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
         adapter = FakeWorkerAdapter()
         with patch.object(project_lock, "_try_lock", side_effect=OSError("flock unavailable")), \
              patch("tabularium.execution.prepare_checkpoint_storage") as prepare:
-            result = run_instruction("No lock", self.root, adapter=adapter, change=True)
+            result = run_instruction("No lock", self.root, adapter=adapter, change=True, allow_unconfined_worker=True)
         self.assertEqual(result.code, "PROJECT_LOCK_UNAVAILABLE")
         prepare.assert_not_called()
         self.assertEqual(adapter.call_count, 0)
@@ -429,7 +429,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
     def test_malformed_stale_owner_is_preserved(self):
         self.owner_path().write_bytes(b"\xffinvalid owner")
         result = run_instruction("Malformed stale record", self.root,
-                                 adapter=FakeWorkerAdapter(), change=True)
+                                 adapter=FakeWorkerAdapter(), change=True, allow_unconfined_worker=True)
         self.assertEqual(result.code, "PROJECT_LOCK_STALE")
         self.assertIn("unreadable owner record", result.message)
         self.assertEqual(self.owner_path().read_bytes(), b"\xffinvalid owner")
@@ -438,13 +438,13 @@ class TestLockReleaseInProcess(ProjectLockFixture):
         before = {p.name: p.read_bytes() for p in (self.root / ".ai" / "tasks").iterdir()}
         adapter = FakeWorkerAdapter()
         with patch("os.fsync", side_effect=OSError("device full")):
-            result = run_instruction("Owner write fails", self.root, adapter=adapter, change=True)
+            result = run_instruction("Owner write fails", self.root, adapter=adapter, change=True, allow_unconfined_worker=True)
         self.assertEqual(result.code, "PROJECT_LOCK_UNAVAILABLE")
         self.assertEqual(adapter.call_count, 0)
         self.assertEqual(before, {p.name: p.read_bytes()
                                  for p in (self.root / ".ai" / "tasks").iterdir()})
         # Even an incomplete owner record is evidence requiring inspection.
-        again = run_instruction("Retry owner write", self.root, adapter=adapter, change=True)
+        again = run_instruction("Retry owner write", self.root, adapter=adapter, change=True, allow_unconfined_worker=True)
         self.assertEqual(again.code, "PROJECT_LOCK_STALE")
 
     def test_interrupt_inside_the_change_releases_the_lock(self):
@@ -453,7 +453,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
 
         with self.assertRaises(KeyboardInterrupt):
             run_instruction("Interrupted change", self.root,
-                            adapter=FakeWorkerAdapter(mutate_fn=interrupt), change=True,
+                            adapter=FakeWorkerAdapter(mutate_fn=interrupt), change=True, allow_unconfined_worker=True,
                             allow_untested=True, confirm=lambda _prompt: True)
         self.assertFalse(self.owner_path().exists())
 
@@ -461,7 +461,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
             (worktree / "src" / "sample.py").write_text("x = 1\n", encoding="utf-8")
 
         result = run_instruction("Next change", self.root,
-                                 adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True,
+                                 adapter=FakeWorkerAdapter(mutate_fn=mutate), change=True, allow_unconfined_worker=True,
                                  allow_untested=True, confirm=lambda _prompt: True)
         self.assertEqual((result.status, result.code), ("COMPLETED", "COMPLETED"), result.message)
 
@@ -479,7 +479,7 @@ class TestLockReleaseInProcess(ProjectLockFixture):
         with patch.object(change_path, "load_change_config", side_effect=probe_then_load), \
              patch("builtins.input") as confirm:
             result = run_instruction("No test config", self.root, adapter=adapter,
-                                     change=True, confirm=confirm)
+                                     change=True, allow_unconfined_worker=True, confirm=confirm)
         self.assertEqual((result.status, result.code), ("REFUSED", "TESTS_NOT_CONFIGURED"))
         self.assertEqual(adapter.call_count, 0)
         confirm.assert_not_called()
@@ -501,14 +501,14 @@ class TestLockReleaseInProcess(ProjectLockFixture):
                                    adapter=FakeWorkerAdapter(
                                        mutate_fn=lambda wt: (wt / "src" / "sample.py")
                                        .write_text("y = 2\n", encoding="utf-8")),
-                                   change=True, allow_untested=True, confirm=lambda _prompt: False)
+                                   change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _prompt: False)
         self.assertEqual(rejected.code, "APPROVAL_REJECTED")
         self.assertFalse(self.owner_path().exists())
 
     def test_non_git_target_is_refused_without_a_lock(self):
         shutil.rmtree(self.root / ".git")
         result = run_instruction("No repository", self.root, adapter=FakeWorkerAdapter(),
-                                 change=True, confirm=lambda _prompt: True)
+                                 change=True, allow_unconfined_worker=True, confirm=lambda _prompt: True)
         self.assertEqual((result.status, result.code), ("REFUSED", "NOT_GIT_REPOSITORY"))
 
     def test_missing_git_preserves_plain_directory_init_but_refuses_repository_mutation(self):

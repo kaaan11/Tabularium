@@ -101,7 +101,7 @@ class TestChangeRefusesApiWorker(ChangePathFixture):
 
         adapter = FakeWorkerAdapter(mutate_fn=mutate)
         result = run_instruction("Swap operands", self.root, adapter=adapter,
-                                 change=True, allow_untested=True, confirm=lambda _: True)
+                                 change=True, allow_untested=True, allow_unconfined_worker=True, confirm=lambda _: True)
         self.assertEqual(result.status, "COMPLETED")
         self.assertEqual(adapter.call_count, 1)
 

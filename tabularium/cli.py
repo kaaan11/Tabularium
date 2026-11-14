@@ -98,6 +98,9 @@ def build_parser() -> argparse.ArgumentParser:
                             help="with --change and no .ai/change.yaml: apply an untested "
                                  "change for this run (recorded in the report and commit); "
                                  "without it such a change is refused")
+    run_parser.add_argument("--allow-unconfined-worker", action="store_true",
+                            help="disable Tabularium worker containment for this --change run "
+                                 "(recorded in warnings, report and commit)")
     run_parser.add_argument("--workflow", default=None,
                             help="execution orchestration: single (default) or "
                                  "dag (governed multi-agent, DEC-2026-0010); "
@@ -570,6 +573,7 @@ def _run_execution(args: argparse.Namespace) -> int:
                              model=args.model, worker=args.worker,
                              workflow=getattr(args, "workflow", None),
                              change=getattr(args, "change", False),
+                             allow_unconfined_worker=getattr(args, "allow_unconfined_worker", False),
                              allow_untested=getattr(args, "allow_untested", False))
     # A --change result carries its own single decision and report; the
     # runtime approval sheet and --persist prompt do not apply to it.

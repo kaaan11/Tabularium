@@ -82,7 +82,8 @@ def run_instruction(instruction: str, path: str | Path | None = None,
                     confirm: Callable[[str], bool] | None = None,
                     custom_verifier: Any = None,
                     pre_apply_hook: Any = None,
-                    allow_untested: bool = False) -> ProductResult:
+                    allow_untested: bool = False,
+                    allow_unconfined_worker: bool = False) -> ProductResult:
     """Run one instruction through M2 → M3 → M4 using one selected worker.
 
     The optional adapter seam exists for deterministic product tests. Worker
@@ -150,6 +151,7 @@ def run_instruction(instruction: str, path: str | Path | None = None,
             custom_verifier=custom_verifier,
             pre_apply_hook=pre_apply_hook,
             allow_untested=allow_untested,
+            allow_unconfined_worker=allow_unconfined_worker,
         )
 
     selected, selection_error = _select_worker(
@@ -839,12 +841,16 @@ def build_execution_report_proposal(target: Path | str,
                                     *,
                                     title: str | None = None,
                                     author: str = "USER") -> Any | None:
-    """Build a deterministic Report PersistenceProposal from a COMPLETED execution.
+    """Build a Report proposal for a completed execution or worker isolation refusal.
 
     Returns a PreparedProposal containing a PersistenceProposal, or None if the
-    execution did not complete or has no pipeline output.
+    execution is otherwise ineligible or has no output/change result.
     """
-    if result.status != "COMPLETED":
+    isolation_refusal = result.code == "WORKER_SANDBOX_UNAVAILABLE"
+    change_info = getattr(result, "change_result", None)
+    change_path_result = (isinstance(change_info, dict)
+                          and isinstance(change_info.get("worker_isolation"), dict))
+    if result.status != "COMPLETED" and not isolation_refusal and not change_path_result:
         return None
     pipeline = result.pipeline
     raw_output = pipeline.output if pipeline is not None else ""
@@ -857,8 +863,14 @@ def build_execution_report_proposal(target: Path | str,
     from tabularium.engine.continuation.planner import build_proposals
 
     target_path = Path(target).resolve()
-    execution_id = pipeline.execution_id if pipeline else f"run-{int(datetime.now(timezone.utc).timestamp()*1000)}"
+    change_metadata = change_info if isinstance(change_info, dict) else {}
+    execution_id = pipeline.execution_id if pipeline else (
+        change_metadata.get("execution_id")
+        or f"run-{int(datetime.now(timezone.utc).timestamp()*1000)}"
+    )
     task_id = getattr(pipeline, "task_id", "") if pipeline else ""
+    if not task_id:
+        task_id = change_metadata.get("task_id", "")
     worker_id = (getattr(pipeline, "worker_id", "") if pipeline else "") or (
         (pipeline.worker_result or {}).get("worker_id", "") if pipeline else ""
     )
@@ -877,8 +889,8 @@ def build_execution_report_proposal(target: Path | str,
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     report_title = title or f"Execution Report for {outcome.execution_id}"
 
-    validation_text = "Validated by Tabularium governed pipeline execution."
-    change_info = getattr(result, "change_result", None)
+    validation_text = (f"Worker refused: {result.code}. {result.message}" if isolation_refusal else
+                       "Validated by Tabularium governed pipeline execution.")
     if change_info and isinstance(change_info, dict):
         validation_text += (
             f"\n\n### Change Path Record\n"
@@ -889,6 +901,12 @@ def build_execution_report_proposal(target: Path | str,
             f"- Apply Result: {change_info.get('apply_result', '')}"
         )
         tests = change_info.get("tests")
+        isolation = change_info.get("worker_isolation")
+        if isinstance(isolation, dict):
+            override = " (--allow-unconfined-worker)" if isolation.get("override") else ""
+            validation_text += f"\n- Worker isolation: {isolation.get('status', '')}{override}"
+            if isolation.get("reason_code"):
+                validation_text += f" ({isolation['reason_code']}: {isolation.get('detail', '')})"
         if isinstance(tests, dict):
             override = (" (untested change allowed by --allow-untested)"
                         if tests.get("untested_override") else "")

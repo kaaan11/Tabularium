@@ -53,7 +53,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
             instruction,
             self.root,
             adapter=fake_worker,
-            change=True, allow_untested=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
         )
 
@@ -104,7 +104,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
             instruction,
             self.root,
             adapter=fake_worker,
-            change=True, allow_untested=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: True,
         )
 
@@ -136,7 +136,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
             "Candidate instruction to reject",
             self.root,
             adapter=fake_worker,
-            change=True, allow_untested=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=lambda _: False,
         )
 
@@ -174,7 +174,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
             "Write secret to env",
             self.root,
             adapter=fake_worker,
-            change=True, allow_untested=True,
+            change=True, allow_unconfined_worker=True, allow_untested=True,
             confirm=spy_confirm,
         )
 
@@ -205,7 +205,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
                 "Change without tty",
                 self.root,
                 adapter=fake_worker,
-                change=True, allow_untested=True,
+                change=True, allow_unconfined_worker=True, allow_untested=True,
                 confirm=None,
             )
 
@@ -226,7 +226,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
             (wt_dir / "src" / "sample.py").write_text("first run output\n")
 
         fake1 = FakeWorkerAdapter(mutate_fn=mutate1)
-        res1 = run_instruction("first instruction", self.root, adapter=fake1, change=True, allow_untested=True, confirm=lambda _: True)
+        res1 = run_instruction("first instruction", self.root, adapter=fake1, change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(res1.status, "COMPLETED")
 
         # The first run commits its own change (auto-commit). An uncommitted
@@ -242,13 +242,13 @@ class TestV209AutoCandidateTask(ChangePathFixture):
             (wt_dir / "src" / "sample.py").write_text("second run output\n")
 
         fake2 = FakeWorkerAdapter(mutate_fn=mutate2)
-        res2 = run_instruction("second instruction", self.root, adapter=fake2, change=True, allow_untested=True, confirm=lambda _: True)
+        res2 = run_instruction("second instruction", self.root, adapter=fake2, change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(res2.status, "COMPLETED")
         self.assertNotEqual(res2.code, "GIT_DIRTY")
 
         (self.root / "src" / "sample.py").write_text("dirty edit\n")
         fake3 = FakeWorkerAdapter(mutate_fn=mutate2)
-        res3 = run_instruction("third instruction", self.root, adapter=fake3, change=True, allow_untested=True, confirm=lambda _: True)
+        res3 = run_instruction("third instruction", self.root, adapter=fake3, change=True, allow_unconfined_worker=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(res3.status, "REFUSED")
         self.assertEqual(res3.code, "GIT_DIRTY")
         self.assertEqual(fake3.call_count, 0)
@@ -271,7 +271,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
                 self.root,
                 task_id=self.task_id,
                 adapter=fake_worker,
-                change=True, allow_untested=True,
+                change=True, allow_unconfined_worker=True, allow_untested=True,
                 confirm=lambda _: True,
             )
 
@@ -297,7 +297,7 @@ class TestV209AutoCandidateTask(ChangePathFixture):
                 "Run that causes start_execution to fail",
                 self.root,
                 adapter=fake_worker,
-                change=True, allow_untested=True,
+                change=True, allow_unconfined_worker=True, allow_untested=True,
                 confirm=lambda _: True,
             )
 

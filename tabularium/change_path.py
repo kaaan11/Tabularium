@@ -1,6 +1,6 @@
 """Governed worktree change path for Tabularium (V2-09 spike A).
 
-Executes writable worker instructions in an isolated git worktree, evaluates
+Executes contained worker processes in a separate git worktree, evaluates
 patches through the security gate, requires explicit single-decision human
 confirmation, and commits single-file changes atomically.
 """
@@ -36,9 +36,53 @@ from tabularium.engine.execution.pipeline import start_execution
 from tabularium.engine.workers.api import ModelTarget
 from tabularium.engine.workers.cli.opencode_worker import OpenCodeCLIWorker, find_opencode_executable
 from tabularium.engine.workers.cli.worker import NativeCLIWorker, find_native_executable
+from tabularium.engine.workers.cli.isolated_process import WorkerIsolation, WORKER_SANDBOX_UNAVAILABLE
 
 
 _API_WORKER_NAMES = frozenset({"api", "api-model", "litellm"})
+
+
+def _persist_execution_report(target, result, actor, timestamp, *,
+                              report_persister=None, note="Change execution report persistence"):
+    """Persist one change-path result report, if the report proposal is valid."""
+    from tabularium.execution import (apply_execution_report_proposal,
+                                      build_execution_report_proposal)
+
+    if report_persister is not None:
+        report_persister(target, result, actor, timestamp)
+        return ""
+
+    report_prop_item = build_execution_report_proposal(target, result, author=actor)
+    if report_prop_item and report_prop_item.ok:
+        persisted = apply_execution_report_proposal(
+            target,
+            report_prop_item.proposal,
+            authorized_by=actor,
+            authorized_at=timestamp,
+            note=note,
+        )
+        if getattr(persisted, "written", False):
+            return report_prop_item.proposal.target_path
+    return ""
+
+
+def _worker_isolation_refusal(target, detail, warnings=(), pipeline=None, report_persister=None,
+                              task_id=None):
+    """Keep setup refusals observable in the result AND the execution report."""
+    from tabularium.execution import ProductResult
+    result = ProductResult(
+        status="REFUSED", code=WORKER_SANDBOX_UNAVAILABLE, target=str(target), pipeline=pipeline,
+        message=f"Worker isolation unavailable: {detail}. No unconfined fallback was used.",
+        warnings=tuple(warnings),
+        change_result={"decision": "REFUSED", "task_id": task_id, "worker_isolation": {
+            "status": "UNAVAILABLE", "reason_code": WORKER_SANDBOX_UNAVAILABLE, "detail": detail}},
+    )
+    actor = get_git_user_name(target) or "USER"
+    now = datetime.now(timezone.utc).isoformat()
+    _persist_execution_report(target, result, actor, now,
+                              report_persister=report_persister,
+                              note="Worker isolation refusal")
+    return result
 
 
 def resolve_test_command(target: Path | str, command: list[str]) -> list[str]:
@@ -453,8 +497,9 @@ def run_change_path(
     pre_apply_hook: Callable[[], None] | None = None,
     report_persister: Callable[..., Any] | None = None,
     allow_untested: bool = False,
+    allow_unconfined_worker: bool = False,
 ) -> Any:
-    """Run one instruction in an isolated worktree with security gate and single confirmation."""
+    """Contain a CLI worker by default, then gate its worktree diff and ask once."""
     from tabularium.execution import ProductResult, _from_pipeline
 
     # 0. The API worker returns text and writes no files, while this path reads
@@ -522,6 +567,40 @@ def run_change_path(
         )
 
     warnings: list[str] = []
+    worker_isolation = {"status": "DISABLED" if allow_unconfined_worker else "ENFORCED",
+                        "override": allow_unconfined_worker}
+    if allow_unconfined_worker:
+        warning = "Worker isolation: DISABLED for this run (--allow-unconfined-worker); worker has host user access."
+        warnings.append(warning)
+        print(warning, file=sys.stderr)
+
+    def finish_worker_result(result):
+        """Attach the isolation record and persist every post-worker outcome."""
+        change_info = result.change_result
+        if isinstance(change_info, dict):
+            change_info = dict(change_info)
+            change_info.setdefault("worker_isolation", dict(worker_isolation))
+        else:
+            change_info = {
+                "decision": result.code or result.status,
+                "worker_isolation": dict(worker_isolation),
+            }
+        result = ProductResult(
+            status=result.status,
+            code=result.code,
+            message=result.message,
+            target=result.target,
+            pipeline=result.pipeline,
+            approval_request=result.approval_request,
+            warnings=result.warnings,
+            change_result=change_info,
+        )
+        actor = get_git_user_name(target) or os.environ.get("USER", "unknown")
+        timestamp = datetime.now(timezone.utc).isoformat()
+        _persist_execution_report(target, result, actor, timestamp,
+                                  report_persister=report_persister)
+        return result
+
     is_auto_task = False
 
     if task_id:
@@ -658,6 +737,19 @@ def run_change_path(
                             warnings=tuple(warnings),
                         )
 
+        isolation = None
+        if not allow_unconfined_worker and type(selected_worker) not in (NativeCLIWorker, OpenCodeCLIWorker):
+            if is_auto_task and task_id:
+                _finalize_candidate_task(target, task_id, status="CANCELLED",
+                                         reason_code=WORKER_SANDBOX_UNAVAILABLE)
+            return _worker_isolation_refusal(
+                target, "this in-process adapter has no supported contained subprocess transport; "
+                        "use a built-in CLI worker or explicitly --allow-unconfined-worker",
+                warnings, report_persister=report_persister, task_id=task_id)
+        if type(selected_worker) in (NativeCLIWorker, OpenCodeCLIWorker):
+            isolation = None if allow_unconfined_worker else WorkerIsolation((str(target.resolve()),))
+            selected_worker.isolation = isolation
+
         resolved_model = getattr(selected_worker, "model_target", None)
         if model and resolved_model is None:
             resolved_model = ModelTarget(model)
@@ -684,13 +776,27 @@ def run_change_path(
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="WORKER_UNAVAILABLE"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code="WORKER_UNAVAILABLE",
-                message="The selected worker could not be started.",
+                message=("The selected worker could not be started: "
+                         f"{type(exc).__name__}: {exc}"),
                 target=str(target),
+                change_result={
+                    "decision": "WORKER_UNAVAILABLE",
+                    "task_id": task_id or "",
+                    "execution_id": execution_id,
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
                 warnings=tuple(warnings),
-            )
+            ))
+
+        if isolation is not None and isolation.error is not None:
+            if is_auto_task and task_id:
+                _finalize_candidate_task(target, task_id, status="CANCELLED",
+                                         reason_code=WORKER_SANDBOX_UNAVAILABLE)
+            return _worker_isolation_refusal(target, isolation.error.detail, warnings,
+                                              pipeline_result, report_persister, task_id)
 
         if pipeline_result.status != "COMPLETED":
             code = pipeline_result.reason_codes[0] if pipeline_result.reason_codes else "PIPELINE_FAILED"
@@ -710,7 +816,7 @@ def run_change_path(
                     warnings=tuple(warnings) + res.warnings,
                     change_result=res.change_result,
                 )
-            return res
+            return finish_worker_result(res)
 
         # 3. Worktree diff
         try:
@@ -718,22 +824,23 @@ def run_change_path(
         except WorktreeError as exc:
             if is_auto_task and task_id:
                 _finalize_candidate_task(target, task_id, status="CANCELLED", reason_code=exc.code)
-            return ProductResult(status="REFUSED", code=exc.code, message=str(exc),
-                                 target=str(target), pipeline=pipeline_result,
-                                 warnings=tuple(warnings))
+            return finish_worker_result(ProductResult(
+                status="REFUSED", code=exc.code, message=str(exc),
+                target=str(target), pipeline=pipeline_result,
+                warnings=tuple(warnings)))
         if not raw_diff.strip():
             if is_auto_task and task_id:
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="NO_CHANGES_PRODUCED"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="COMPLETED",
                 code="NO_CHANGES_PRODUCED",
                 message="The worker produced no change.",
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         # 4. Gate evaluation
         try:
@@ -743,14 +850,14 @@ def run_change_path(
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="DIFF_SYNTAX_INVALID"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code="DIFF_SYNTAX_INVALID",
                 message=f"Diff syntax parse error: {exc}",
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         reason = unsupported_diff_reason(raw_diff, len(file_patches))
         if reason:
@@ -758,28 +865,28 @@ def run_change_path(
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="DIFF_UNSUPPORTED"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code="DIFF_UNSUPPORTED",
                 message=f"The change cannot be applied as shown ({reason}); nothing was applied.",
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         if not file_patches:
             if is_auto_task and task_id:
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="NO_CHANGES_PRODUCED"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="COMPLETED",
                 code="NO_CHANGES_PRODUCED",
                 message="The worker produced no change.",
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         target_files = tuple(fp.normalized_path for fp in file_patches)
         proposal = PatchProposal(
@@ -798,14 +905,14 @@ def run_change_path(
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code=code
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code=code,
                 message=f"Change proposal failed security gate ({code}): {details}",
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         # A change set applies all of its files or none of them; its size is bounded.
         if len(target_files) > MAX_FILES:
@@ -813,7 +920,7 @@ def run_change_path(
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="CHANGESET_TOO_LARGE"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code="CHANGESET_TOO_LARGE",
                 message=(
@@ -823,7 +930,7 @@ def run_change_path(
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         reason = next((r for fp in file_patches
                        if (r := apply_preflight_reason(target, worktree, fp))), "")
@@ -832,14 +939,14 @@ def run_change_path(
                 _finalize_candidate_task(
                     target, task_id, status="CANCELLED", reason_code="PATCH_NOT_APPLICABLE"
                 )
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code="PATCH_NOT_APPLICABLE",
                 message=f"Not asking for approval: {reason}. Nothing was applied.",
                 target=str(target),
                 pipeline=pipeline_result,
                 warnings=tuple(warnings),
-            )
+            ))
 
         # 5. Single human confirmation
         is_interactive = confirm is not None or sys.stdin.isatty()
@@ -849,6 +956,7 @@ def run_change_path(
                     target, task_id, status="CANCELLED", reason_code="APPROVAL_REQUIRED"
                 )
             change_info = {
+                "worker_isolation": worker_isolation,
                 "proposal": proposal,
                 "binding": proposal.binding(),
                 "diff_digest": proposal.diff_digest,
@@ -856,7 +964,7 @@ def run_change_path(
                 "decision": "AWAITING_APPROVAL",
                 "apply_result": None,
             }
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="AWAITING_APPROVAL",
                 code="APPROVAL_REQUIRED",
                 message=("Applying a change needs an interactive terminal. Nothing was "
@@ -866,7 +974,7 @@ def run_change_path(
                 pipeline=pipeline_result,
                 change_result=change_info,
                 warnings=tuple(warnings),
-            )
+            ))
 
         # 5b. Run isolated tests on project copy if configured
         test_info: dict[str, Any]
@@ -889,7 +997,7 @@ def run_change_path(
                         _finalize_candidate_task(
                             target, task_id, status="CANCELLED", reason_code="DIFF_UNSUPPORTED"
                         )
-                    return ProductResult(
+                    return finish_worker_result(ProductResult(
                         status="REFUSED",
                         code="DIFF_UNSUPPORTED",
                         message=(f"{rel}: the approved diff could not be staged for the isolated "
@@ -897,7 +1005,7 @@ def run_change_path(
                         target=str(target),
                         pipeline=pipeline_result,
                         warnings=tuple(warnings),
-                    )
+                    ))
 
             cmd_display = " ".join(change_cfg.test_command)
             print(sanitize_terminal(f"Running tests in an isolated copy: {cmd_display}"))
@@ -921,6 +1029,7 @@ def run_change_path(
                         target, task_id, status="CANCELLED", reason_code=code
                     )
                 change_info = {
+                    "worker_isolation": worker_isolation,
                     "proposal": proposal,
                     "binding": proposal.binding(),
                     "diff_digest": proposal.diff_digest,
@@ -936,7 +1045,7 @@ def run_change_path(
                         "untested_override": False,
                     },
                 }
-                return ProductResult(
+                return finish_worker_result(ProductResult(
                     status="REFUSED",
                     code=code,
                     message=f"Sandbox error ({code}): {detail}",
@@ -944,7 +1053,7 @@ def run_change_path(
                     pipeline=pipeline_result,
                     change_result=change_info,
                     warnings=tuple(warnings),
-                )
+                ))
 
             if not run_res.passed:
                 code = "ISOLATED_TESTS_FAILED"
@@ -972,6 +1081,7 @@ def run_change_path(
                     "untested_override": False,
                 }
                 change_info = {
+                    "worker_isolation": worker_isolation,
                     "proposal": proposal,
                     "binding": proposal.binding(),
                     "diff_digest": proposal.diff_digest,
@@ -980,7 +1090,7 @@ def run_change_path(
                     "apply_result": None,
                     "tests": test_info,
                 }
-                return ProductResult(
+                return finish_worker_result(ProductResult(
                     status="REFUSED",
                     code=code,
                     message=msg,
@@ -988,7 +1098,7 @@ def run_change_path(
                     pipeline=pipeline_result,
                     change_result=change_info,
                     warnings=tuple(warnings),
-                )
+                ))
 
             test_info = {
                 "status": "PASSED",
@@ -1036,6 +1146,7 @@ def run_change_path(
                     target, task_id, status="CANCELLED", reason_code="APPROVAL_REJECTED"
                 )
             change_info = {
+                "worker_isolation": worker_isolation,
                 "proposal": proposal,
                 "binding": proposal.binding(),
                 "diff_digest": proposal.diff_digest,
@@ -1044,7 +1155,7 @@ def run_change_path(
                 "apply_result": None,
                 "tests": test_info,
             }
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code="APPROVAL_REJECTED",
                 message="Change application rejected by user.",
@@ -1052,7 +1163,7 @@ def run_change_path(
                 pipeline=pipeline_result,
                 change_result=change_info,
                 warnings=tuple(warnings),
-            )
+            ))
 
         actor = get_git_user_name(target) or os.environ.get("USER", "unknown")
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -1067,6 +1178,7 @@ def run_change_path(
                     target, task_id, status="CANCELLED", reason_code=code, actor=actor, timestamp=now_iso
                 )
             change_info = {
+                "worker_isolation": worker_isolation,
                 "proposal": proposal,
                 "binding": proposal.binding(),
                 "diff_digest": proposal.diff_digest,
@@ -1075,7 +1187,7 @@ def run_change_path(
                 "apply_result": None,
                 "tests": test_info,
             }
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code=code,
                 message="Target project changed after tests/approval; nothing was applied.",
@@ -1083,7 +1195,7 @@ def run_change_path(
                 pipeline=pipeline_result,
                 change_result=change_info,
                 warnings=tuple(warnings),
-            )
+            ))
 
         authorization = PatchAuthorization(
             proposal_id=proposal.proposal_id,
@@ -1127,6 +1239,7 @@ def run_change_path(
                     target, task_id, status="CANCELLED", reason_code=code, actor=actor, timestamp=now_iso
                 )
             change_info = {
+                "worker_isolation": worker_isolation,
                 "proposal": proposal,
                 "binding": proposal.binding(),
                 "diff_digest": proposal.diff_digest,
@@ -1135,7 +1248,7 @@ def run_change_path(
                 "apply_result": apply_res.status,
                 "tests": test_info,
             }
-            return ProductResult(
+            return finish_worker_result(ProductResult(
                 status="REFUSED",
                 code=code,
                 message=f"Change application failed ({code}): {', '.join(apply_res.reason_codes)}",
@@ -1143,10 +1256,11 @@ def run_change_path(
                 pipeline=pipeline_result,
                 change_result=change_info,
                 warnings=tuple(warnings),
-            )
+            ))
 
         # 7. Record
         change_info = {
+            "worker_isolation": worker_isolation,
             "proposal": proposal,
             "binding": proposal.binding(),
             "diff_digest": proposal.diff_digest,
@@ -1171,27 +1285,8 @@ def run_change_path(
             )
 
         # Apply report persistence to .ai/reports
-        report_path = ""
-        if report_persister is not None:
-            report_persister(target, product_res, actor, now_iso)
-        else:
-            from tabularium.execution import (
-                apply_execution_report_proposal,
-                build_execution_report_proposal,
-            )
-            report_prop_item = build_execution_report_proposal(
-                target, product_res, author=actor
-            )
-            if report_prop_item and report_prop_item.ok:
-                persisted = apply_execution_report_proposal(
-                    target,
-                    report_prop_item.proposal,
-                    authorized_by=actor,
-                    authorized_at=now_iso,
-                    note="Change execution report persistence",
-                )
-                if getattr(persisted, "written", False):
-                    report_path = report_prop_item.proposal.target_path
+        report_path = _persist_execution_report(
+            target, product_res, actor, now_iso, report_persister=report_persister)
 
         # Commit the approved change with its governance records, so the next
         # --change starts from a clean tree and history carries the approval.
@@ -1209,7 +1304,8 @@ def run_change_path(
                    f"Task: {task_id or '-'}\n"
                    f"Approved-by: {actor} at {now_iso}\n"
                    f"Diff-digest: {proposal.diff_digest}\n"
-                   f"{tests_line}\n")
+                   f"{tests_line}\n"
+                   f"Worker-isolation: {'disabled (--allow-unconfined-worker)' if allow_unconfined_worker else 'bubblewrap (network allowed)'}\n")
         sha, failure = commit_applied_change(target, commit_paths, message)
         change_info["commit"] = sha or None
         if failure:

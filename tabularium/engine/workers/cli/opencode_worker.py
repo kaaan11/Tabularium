@@ -26,6 +26,8 @@ from .prompt import render_prompt
 from .bounded_process import BoundedProcess
 from .transport import _environment
 from .worker import _scrub
+from .isolated_process import IsolatedBoundedProcess
+from tabularium.engine.code_gate.isolated_run import SandboxError
 
 OPENCODE_WORKER_ID = "opencode-cli"
 _DEFAULT_PATHS = (
@@ -68,6 +70,7 @@ class OpenCodeCLIWorker:
         self.executable = executable or find_opencode_executable()
         self.model = model
         self.change_mode = change_mode
+        self.isolation = None  # Set by the governed --change path.
         self.permissions = permissions
         if self.change_mode and self.permissions is None:
             self.permissions = {
@@ -175,7 +178,10 @@ class OpenCodeCLIWorker:
             )
 
         try:
-            process = BoundedProcess(argv, self.cwd, self.timeout_s, self.max_output_bytes, env=env)
+            process = (IsolatedBoundedProcess(argv, self.cwd, self.timeout_s, self.max_output_bytes,
+                                              env=env, isolation=self.isolation)
+                       if self.isolation is not None else
+                       BoundedProcess(argv, self.cwd, self.timeout_s, self.max_output_bytes, env=env))
             self._current_process = process
             captured = process.run()
             if captured.outcome != "EXITED":
@@ -259,6 +265,10 @@ class OpenCodeCLIWorker:
                 diagnostics=tuple(diagnostics),
             )
 
+        except SandboxError as exc:
+            return WorkerResult(request_id=request.request_id, status=FAILED, output="",
+                                worker_id=self.descriptor.worker_id,
+                                diagnostics=({"code": exc.code, "detail": exc.detail},))
         except Exception as exc:
             return WorkerResult(
                 request_id=request.request_id,

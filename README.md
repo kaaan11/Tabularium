@@ -15,8 +15,8 @@ between releases. Linux is the supported platform.
 ## Five-minute tour
 
 Requirements: Python 3.12+, git with `user.name` and `user.email` set.
-`bubblewrap` (`bwrap`) is needed to run your tests in isolation during
-`--change`.
+`bubblewrap` (`bwrap`) with usable Linux namespaces is required for the default
+worker containment and isolated tests during `--change`.
 
 ```bash
 git clone https://github.com/kaaan11/Tabularium.git && cd Tabularium
@@ -64,7 +64,9 @@ tabu explain "add a health check endpoint"
 tabu run "add kelvin conversions" --change
 ```
 
-1. The worker edits a separate git worktree, not your checkout.
+1. The worker edits a separate git worktree inside Tabularium's bubblewrap
+   filesystem boundary. It has a fresh private home and network access for
+   provider calls. Your host home and original checkout are invisible.
 2. The diff is checked by the gates. Writes to `.git/`, `.ai/`, git
    configuration files, agent configuration (`.claude`, `.codex`,
    `opencode.json`) and key or `.env` files are refused. A change can touch at
@@ -104,6 +106,22 @@ CLI (`codex` on `PATH`, the default when present) or OpenCode
 `--change --worker api` is refused with `CHANGE_WORKER_UNSUPPORTED` before any
 provider call; use it without `--change`.
 
+Worker containment is **on by default**. If bubblewrap, usable namespaces or the
+required mounts are unavailable, the run is refused with
+`WORKER_SANDBOX_UNAVAILABLE`, naming the prerequisite in the message and recording
+the refusal in an execution report. Tabularium never retries the worker unconfined.
+Only `--allow-unconfined-worker` disables this boundary for one run; warnings, the
+execution report and commit metadata record the override. It does not disable
+the gates, approval or test sandbox.
+
+The contained CLIs get **no existing login state or host configuration**. They
+must support credentials explicitly passed by name through `TABU_WORKER_ENV`;
+those credentials are available to the untrusted worker. Home-installed CLIs
+must be standalone executables: adjacent npm packages, custom runtimes and
+host virtualenvs are not mounted. See the [worker security boundary and per-worker
+matrix](WORKER_SECURITY.md) for the exact mounts, authentication limitations and
+the distinction between Tabularium containment and provider CLI flags.
+
 ## What it guarantees, and what it does not
 
 **Guarantees, each covered by the test suite:**
@@ -118,6 +136,10 @@ provider call; use it without `--change`.
   write nothing.
 - **Gated changes.** `--change` applies nothing you did not see and confirm,
   and nothing that failed the gates or your tests.
+- **Worker filesystem containment by default for `--change`.** Built-in CLI
+  workers and their subprocesses run inside a mount and PID namespace with
+  allowlisted paths. Missing isolation refuses execution; the explicit
+  `--allow-unconfined-worker` override is recorded.
 - **Project mutations are serialized.** `run` (including `--change`), `continue`,
   Task creation/transitions/approval, initialization, onboarding writes, and record
   persistence share a nonblocking advisory lock. It spans preflight through
@@ -129,9 +151,11 @@ provider call; use it without `--change`.
 
 **Not guaranteed:**
 
-- **The worker is not sandboxed by Tabularium.** It runs with your user's
-  permissions, network access and its own credentials. Worktree isolation
-  protects your checkout, not your machine. Only the test run is sandboxed.
+- **No worker egress restriction.** Contained coding workers share the host
+  network, including local services. They can transmit project data and any
+  explicitly passed credentials. Tests separately run without network access.
+  Worktrees alone provide no host confinement. Runs without `--change`, and
+  runs using `--allow-unconfined-worker`, have no Tabularium OS containment.
 - **Correctness is not verified.** Passing your tests is the only
   correctness signal. A reviewed diff is still your responsibility.
 - **Crash recovery is manual.** A killed process releases its OS lock but leaves
@@ -208,6 +232,9 @@ and use your own credentials. Each check prints a `LIVE-SMOKE` line with the
 CLI or provider version and the outcome code, never provider output. A
 requested target whose prerequisite is missing fails with the missing piece
 named; targets you did not request are skipped as `NOT VERIFIED`.
+Coding checks use the default contained profile: host login sessions are not
+mounted, so the CLI must support authentication through explicitly passed
+environment variables as described in [WORKER_SECURITY.md](WORKER_SECURITY.md).
 
 `examples/skills/architecture-review/` is the reference skill package used by
 the skill tests.
