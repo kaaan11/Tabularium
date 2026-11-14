@@ -1,5 +1,6 @@
-# Public-tree CI. GitHub runs only .github/workflows/; the export step installs
-# this file there. The private repository keeps its self-hosted workflow.
+# Continuous integration: tests on supported Python versions, a non-editable
+# wheel smoke test, generated-artifact hygiene, a bounded lint baseline and a
+# dependency vulnerability audit. Actions are pinned to release tags.
 name: ci
 
 on:
@@ -57,3 +58,39 @@ jobs:
       - uses: actions/checkout@v4
       - name: No generated artifacts tracked
         run: "! git ls-files | grep -E '(^|/)(__pycache__|build|dist)(/|$)|\\.pyc$|\\.egg-info'"
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      # Bounded baseline: syntax errors and undefined names only (E9, F63, F7,
+      # F82). Widen the rule set deliberately, in its own change.
+      # Known exceptions, each to be removed once fixed in code:
+      # - tabularium/execution.py F821: `Callable` is used in an annotation
+      #   but never imported.
+      # - tests/test_phase1_i7_explain_engine.py F823: `run_instruction` is
+      #   imported locally after a branch that already calls it.
+      - name: Ruff (pinned)
+        run: >-
+          uvx ruff@0.8.6 check
+          --select E9,F63,F7,F82
+          --config 'lint.per-file-ignores = {"tabularium/execution.py" = ["F821"], "tests/test_phase1_i7_explain_engine.py" = ["F823"]}'
+          --output-format github
+          tabularium tests
+
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      # Resolve the package with every extra, then audit the exact installed
+      # versions against the PyPA advisory database. The local package itself
+      # is excluded because it is not published from this run.
+      - name: Resolve dependencies
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv ".[api,runtime,observability,dev]"
+          uv pip freeze --python .venv --exclude-editable | grep -v '^tabularium-os' > audit-requirements.txt
+      - name: pip-audit (pinned)
+        run: uvx pip-audit@2.7.3 --requirement audit-requirements.txt --no-deps --disable-pip --strict
