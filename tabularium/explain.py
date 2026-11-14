@@ -27,6 +27,8 @@ from tabularium.engine.execution import (ExecutionPlan, PipelineResult,
                                PREPARATION_REJECTED)
 from tabularium.engine.workers.api import ModelTarget
 
+from .change_config import (ChangeConfigError, TESTS_NOT_CONFIGURED,
+                            TESTS_NOT_CONFIGURED_MESSAGE, load_change_config)
 from .diagnostics import status_project
 from .execution import (MODEL_IGNORED_BY_NATIVE_WARNING, INVALID_PROJECT,
                         PROJECT_PATH_INVALID, WORKER_UNAVAILABLE,
@@ -129,6 +131,7 @@ def preflight(instruction: str, path: str | Path | None = None, *,
               task_id: str | None = None, model: str | None = None,
               worker: str | None = None, adapter: Any = None,
               workflow: str | None = None,
+              change: bool = False, allow_untested: bool = False,
               command: str = "explain") -> ExplainResult:
     """Run every pre-runtime gate exactly as `run` would, then stop."""
     target, error = _target(path)
@@ -157,6 +160,31 @@ def preflight(instruction: str, path: str | Path | None = None, *,
     if gate:
         return _project(command, gate, gates=gates, requested_task=requested)
     gates.append(GateFact("project_health", "PASSED"))
+
+    # Inspect configuration only: a preflight must never execute a test command.
+    try:
+        change_cfg = load_change_config(target)
+    except ChangeConfigError as exc:
+        detail = f"Invalid change configuration: {exc}"
+        gates.append(GateFact("test_readiness", "REFUSED" if change else "SKIPPED", detail))
+        if change:
+            return _project(command, _refusal(target, exc.code, detail),
+                            gates=gates, requested_task=requested)
+    else:
+        if change_cfg is None:
+            detail = TESTS_NOT_CONFIGURED_MESSAGE
+            if change and allow_untested:
+                detail = ("Tests: NOT_CONFIGURED; untested change allowed by "
+                          "--allow-untested; diff approval still required.")
+            gates.append(GateFact("test_readiness",
+                                  "REFUSED" if change and not allow_untested else "SKIPPED",
+                                  detail))
+            if change and not allow_untested:
+                return _project(command, _refusal(target, TESTS_NOT_CONFIGURED, detail),
+                                gates=gates, requested_task=requested)
+        else:
+            gates.append(GateFact("test_readiness", "SKIPPED",
+                                  "Tests: CONFIGURED (.ai/change.yaml); not run during preflight."))
 
     chosen_task, task_error = _choose_task(target, task_id)
     if task_error:
@@ -271,7 +299,7 @@ def preflight(instruction: str, path: str | Path | None = None, *,
                 "governed execution now.",
         task_id=chosen_task, requested_task=requested,
         worker=worker_facts,
-        approval_required=preflight_result.approval_required,
+        approval_required=change or preflight_result.approval_required,
         metrics=metrics,
         gates=tuple(gates) + (GateFact("preparation", "PASSED"),),
         warnings=tuple(warnings))

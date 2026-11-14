@@ -16,6 +16,8 @@ from tabularium.engine.workers.model import CANCELLABLE, STREAMS_OUTPUT, STRUCTU
 
 from .prompt import render_prompt
 from .transport import CANCELLED, EXITED, SPAWN_FAILED, TIMED_OUT, NativeProcess
+from .isolated_process import IsolatedNativeProcess
+from tabularium.engine.code_gate.isolated_run import SandboxError
 
 NATIVE_WORKER_ID = "codex-cli"
 _CANDIDATES = ("codex", "codex.exe")
@@ -67,6 +69,7 @@ class NativeCLIWorker:
                  sandbox: str = "read-only"):
         self.executable = executable or find_native_executable()
         self.sandbox = sandbox
+        self.isolation = None  # Set by the governed --change path, never by CLI flags.
         self._scratch = None
         if cwd is None:
             self._scratch = tempfile.TemporaryDirectory(prefix="tabu-native-")
@@ -174,9 +177,15 @@ class NativeCLIWorker:
                 if isinstance(usage, dict):
                     diagnostics.append({"code": "USAGE", "detail": json.dumps(usage, sort_keys=True)})
 
-        self._process = NativeProcess(argv, self.cwd, prompt,
-                                      self.timeout_s)
-        outcome = self._process.run(on_line=on_line)
+        self._process = (IsolatedNativeProcess(argv, self.cwd, prompt, self.timeout_s,
+                                               isolation=self.isolation)
+                         if self.isolation is not None else
+                         NativeProcess(argv, self.cwd, prompt, self.timeout_s))
+        try:
+            outcome = self._process.run(on_line=on_line)
+        except SandboxError as exc:
+            return WorkerResult(request.request_id, self.descriptor.worker_id, FAILED,
+                                diagnostics=({"code": exc.code, "detail": exc.detail},))
         diagnostics.insert(0, {"code": "TRANSPORT_OUTCOME", "detail": outcome.outcome})
         diagnostics.insert(1, {"code": "EXIT_CODE", "detail": str(outcome.exit_code)})
         limitations: list[str] = []

@@ -17,6 +17,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from tabularium.version import get_version
+from .project_lock import serialized_project
 
 TEMPLATE_PACKAGE = "tabularium.templates"
 RULESET_VERSION = get_version()
@@ -277,6 +278,8 @@ def _missing_scaffold_items(target: Path) -> tuple[str, ...]:
     ))
 
 
+@serialized_project("raw_target", lambda target, exc, args: InitResult(
+    "REFUSED", str(target), code=exc.code, message=str(exc)))
 def initialize(raw_target: str | Path | None = None) -> InitResult:
     """Initialize one target, refusing existing partial or conflicting state."""
     target = _canonical_target(raw_target)
