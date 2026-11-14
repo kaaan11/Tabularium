@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .project_lock import serialized_execution
+
 from tabularium.engine.context_loader.confinement import ProjectScope
 from tabularium.engine.context_loader.discovery import TERMINAL_TASK_STATUSES, discover
 from tabularium.engine.execution import (ExecutionPlan, PipelineResult,
@@ -68,6 +70,7 @@ class ProductResult:
     change_result: Any = None
 
 
+@serialized_execution("path")
 def run_instruction(instruction: str, path: str | Path | None = None,
                     *, task_id: str | None = None,
                     model: str | None = None,
@@ -203,6 +206,7 @@ def run_instruction(instruction: str, path: str | Path | None = None,
     return _from_pipeline(target, result, warnings=warnings)
 
 
+@serialized_execution("path")
 def continue_execution(path: str | Path | None = None, *,
                        resolution: Any = None) -> ProductResult:
     """Resume the existing checkpointed approval boundary, if one exists."""

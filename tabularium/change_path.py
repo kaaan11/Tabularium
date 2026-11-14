@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from tabularium.project_lock import serialized_execution
 from tabularium.change_config import (
     ChangeConfig, ChangeConfigError, TESTS_NOT_CONFIGURED,
     TESTS_NOT_CONFIGURED_MESSAGE, config_digest, load_change_config,
@@ -434,6 +435,7 @@ def unsupported_diff_reason(raw_diff: str, parsed_count: int) -> str:
     return ""
 
 
+@serialized_execution("target")
 def run_change_path(
     target: Path,
     instruction: str,
