@@ -113,8 +113,10 @@ model through LiteLLM (`--worker api`, `pip install -e ".[api]"`).
   correctness signal. A reviewed diff is still your responsibility.
 - **No concurrency control.** Do not run two Tabularium operations on one project at
   once.
-- **Live providers are not tested.** Worker integrations are covered by
-  offline fixtures. A given provider or CLI version may still fail.
+- **Live providers are not tested in CI.** Worker integrations are covered by
+  offline fixtures. A given provider or CLI version may still fail. Opt-in
+  live smoke checks exist for maintainers (see Development); their result
+  holds only for the versions they report.
 - **No automation of approvals.** Task transitions (`start`, `approve`,
   `complete`) and record authorizations stay manual by design.
 
@@ -141,6 +143,23 @@ Experimental: `--workflow dag`, the `tui`, and the `interop`, `remote` and
 pip install -e ".[api,runtime,observability,dev]"
 python -m pytest tests -q
 ```
+
+The default run is fixture-tested only: it makes no provider or model calls
+and needs no credentials. Live smoke checks against real workers are opt-in:
+
+```bash
+TABULARIUM_LIVE_SMOKE=api,codex,opencode python -m pytest tests/test_live_smoke.py -v -s -rA
+```
+
+`api` sends one bounded request (needs one of `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` and the `api` extra);
+`codex` and `opencode` run an approved and a declined `run --change` with the
+installed CLI (`TABU_NATIVE_EXECUTABLE` / `TABU_OPENCODE_EXECUTABLE` override
+the lookup; `TABU_MODEL` picks the OpenCode model). These calls are billable
+and use your own credentials. Each check prints a `LIVE-SMOKE` line with the
+CLI or provider version and the outcome code, never provider output. A
+requested target whose prerequisite is missing fails with the missing piece
+named; targets you did not request are skipped as `NOT VERIFIED`.
 
 `examples/skills/architecture-review/` is the reference skill package used by
 the skill tests.
