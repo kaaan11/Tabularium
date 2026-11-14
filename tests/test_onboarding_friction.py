@@ -238,7 +238,7 @@ class TestOnboardingFriction(unittest.TestCase):
                       return_value="/nonexistent/codex"):
             try:
                 code = main(["run", "write secret to .env: API_KEY=sk-abcdefghij1234567890abcdef", str(root),
-                             "--change", "--worker", "native"])
+                             "--change", "--allow-untested", "--worker", "native"])
             except SystemExit as exc:
                 code = exc.code
 

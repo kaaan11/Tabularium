@@ -251,7 +251,7 @@ class TestChangeTestsSuite(ChangeTestsFixture):
         self.assertTrue(res.change_result["tests"]["timed_out"])
 
     # 4. No configuration.
-    def test_04_no_config_warns_and_proceeds(self) -> None:
+    def test_04_explicit_untested_override_warns_and_proceeds(self) -> None:
         cfg = self.root / ".ai" / "change.yaml"
         if cfg.exists():
             cfg.unlink()
@@ -272,18 +272,19 @@ class TestChangeTestsSuite(ChangeTestsFixture):
                 path=self.root,
                 instruction="Apply without change.yaml",
                 change=True,
+                allow_untested=True,
                 adapter=adapter,
                 confirm=confirm,
             )
 
         self.assertEqual(res.status, "COMPLETED")
         self.assertEqual(len(confirm_called), 1)
-        expected_warning = "Tests: NOT RUN (no .ai/change.yaml)"
+        expected_warning = "Tests: NOT RUN (no .ai/change.yaml; untested change allowed by --allow-untested)"
         self.assertIn(expected_warning, res.warnings)
         self.assertIn(expected_warning, stdout_buf.getvalue())
 
         msg = self.get_last_commit_message()
-        self.assertIn("Tests: not configured", msg)
+        self.assertIn("Tests: not run (no .ai/change.yaml; --allow-untested)", msg)
         self.assertEqual(res.change_result["tests"]["status"], "NOT_CONFIGURED")
 
     # 5. Invalid configuration (at least one parameterized case per item)
@@ -623,7 +624,7 @@ class TestTerminalSanitizationWiring(ChangeTestsFixture):
         out = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value="n"):
-            res = run_instruction(path=self.root, instruction="Escape in diff", change=True,
+            res = run_instruction(path=self.root, instruction="Escape in diff", change=True, allow_untested=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=None)
         self.assertEqual(res.code, "APPROVAL_REJECTED", res.message)
         printed = out.getvalue()
@@ -709,7 +710,7 @@ class TestDiffPreviewAndChangeConfigHardening(ChangeTestsFixture):
         out = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value="n"):
-            res = run_instruction(path=self.root, instruction="Bidi in diff", change=True,
+            res = run_instruction(path=self.root, instruction="Bidi in diff", change=True, allow_untested=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=None)
         self.assertEqual(res.code, "APPROVAL_REJECTED", res.message)
         self.assertNotIn("\u202e", out.getvalue())
@@ -756,7 +757,7 @@ class TestDiffPreviewAndChangeConfigHardening(ChangeTestsFixture):
                            capture_output=True)
             return True
 
-        res = run_instruction(path=self.root, instruction="Race with a commit", change=True,
+        res = run_instruction(path=self.root, instruction="Race with a commit", change=True, allow_untested=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=confirm_after_commit)
         self.assertEqual(res.code, TARGET_CHANGED, res.message)
         self.assertIn("return 'old'", (self.root / "pkg" / "a.py").read_text())
@@ -849,7 +850,7 @@ class TestIsolatedTestExecutionHardening(ChangeTestsFixture):
             script.chmod(0o755)
 
         confirm = MagicMock(return_value=True)
-        res = run_instruction(path=self.root, instruction="Add a script", change=True,
+        res = run_instruction(path=self.root, instruction="Add a script", change=True, allow_untested=True,
                               adapter=FakeWorkerAdapter(mutate_fn=mutate), confirm=confirm)
         self.assertEqual(res.status, "REFUSED")
         self.assertEqual(res.code, "DIFF_UNSUPPORTED", res.message)
@@ -955,7 +956,7 @@ class TestIsolatedTestSecurityHardening(ChangeTestsFixture):
         hook.chmod(0o755)
         err = io.StringIO()
         with patch("sys.stderr", err):
-            res = run_instruction(path=self.root, instruction="Hook fails", change=True,
+            res = run_instruction(path=self.root, instruction="Hook fails", change=True, allow_untested=True,
                                   adapter=FakeWorkerAdapter(mutate_fn=mutate_a), confirm=lambda _: True)
         self.assertEqual(res.status, "COMPLETED", res.message)
         self.assertIn("not committed", err.getvalue())

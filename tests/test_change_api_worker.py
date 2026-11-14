@@ -79,7 +79,7 @@ class TestChangeRefusesApiWorker(ChangePathFixture):
                 patch("tabularium.change_path.find_native_executable", return_value=None), \
                 patch("tabularium.change_path.find_opencode_executable", return_value=None):
             result = run_instruction("Edit sample", self.root, model="fake/model",
-                                     change=True, confirm=lambda _: True)
+                                     change=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.status, "REFUSED")
         self.assertEqual(result.code, "WORKER_SELECTION_REQUIRED")
         self.assertIn("--worker api", result.message)
@@ -101,7 +101,7 @@ class TestChangeRefusesApiWorker(ChangePathFixture):
 
         adapter = FakeWorkerAdapter(mutate_fn=mutate)
         result = run_instruction("Swap operands", self.root, adapter=adapter,
-                                 change=True, confirm=lambda _: True)
+                                 change=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.status, "COMPLETED")
         self.assertEqual(adapter.call_count, 1)
 

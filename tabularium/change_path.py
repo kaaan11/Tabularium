@@ -17,7 +17,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from tabularium.change_config import ChangeConfig, ChangeConfigError, config_digest, load_change_config
+from tabularium.change_config import (
+    ChangeConfig, ChangeConfigError, TESTS_NOT_CONFIGURED,
+    TESTS_NOT_CONFIGURED_MESSAGE, config_digest, load_change_config,
+)
 from tabularium.terminal import sanitize_terminal
 from tabularium.engine.code_gate.changeset import MAX_FILES, apply_changeset_transactional
 from tabularium.engine.code_gate import (
@@ -447,6 +450,7 @@ def run_change_path(
     custom_verifier: Callable[[dict[str, str]], tuple[bool, str]] | None = None,
     pre_apply_hook: Callable[[], None] | None = None,
     report_persister: Callable[..., Any] | None = None,
+    allow_untested: bool = False,
 ) -> Any:
     """Run one instruction in an isolated worktree with security gate and single confirmation."""
     from tabularium.execution import ProductResult, _from_pipeline
@@ -503,6 +507,15 @@ def run_change_path(
             status="REFUSED",
             code="CHANGE_CONFIG_INVALID",
             message=f"Invalid change configuration: {exc}",
+            target=str(target),
+        )
+    # No configured verification: refuse unless the person explicitly allowed
+    # an untested change for this run (a choice separate from approving the diff).
+    if change_cfg is None and not allow_untested:
+        return ProductResult(
+            status="REFUSED",
+            code=TESTS_NOT_CONFIGURED,
+            message=TESTS_NOT_CONFIGURED_MESSAGE,
             target=str(target),
         )
 
@@ -918,6 +931,7 @@ def run_change_path(
                         "duration_s": test_duration,
                         "timed_out": False,
                         "truncated": False,
+                        "untested_override": False,
                     },
                 }
                 return ProductResult(
@@ -953,6 +967,7 @@ def run_change_path(
                     "duration_s": test_duration,
                     "timed_out": run_res.timed_out,
                     "truncated": run_res.truncated,
+                    "untested_override": False,
                 }
                 change_info = {
                     "proposal": proposal,
@@ -979,9 +994,11 @@ def run_change_path(
                 "duration_s": test_duration,
                 "timed_out": False,
                 "truncated": run_res.truncated,
+                "untested_override": False,
             }
         else:
-            no_cfg_warn = "Tests: NOT RUN (no .ai/change.yaml)"
+            no_cfg_warn = ("Tests: NOT RUN (no .ai/change.yaml; "
+                           "untested change allowed by --allow-untested)")
             warnings.append(no_cfg_warn)
             test_info = {
                 "status": "NOT_CONFIGURED",
@@ -989,12 +1006,13 @@ def run_change_path(
                 "duration_s": 0.0,
                 "timed_out": False,
                 "truncated": False,
+                "untested_override": True,
             }
 
         if change_cfg is not None:
             print(f"Tests: PASSED ({test_duration:.2f} s)")
         else:
-            print("Tests: NOT RUN (no .ai/change.yaml)")
+            print(no_cfg_warn)
 
         if confirm is not None:
             approved = confirm("Uygula? [y/N]")
@@ -1184,7 +1202,7 @@ def run_change_path(
         if change_cfg is not None:
             tests_line = f"Tests: passed ({' '.join(change_cfg.test_command)})"
         else:
-            tests_line = "Tests: not configured"
+            tests_line = "Tests: not run (no .ai/change.yaml; --allow-untested)"
         message = (f"tabu: {subject}\n\n"
                    f"Task: {task_id or '-'}\n"
                    f"Approved-by: {actor} at {now_iso}\n"
