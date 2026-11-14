@@ -12,8 +12,9 @@
 # packages disables export and changes nothing about execution, approval, tool
 # authorization, persistence, or project truth.
 #
-# Declared, not installed globally by this repository.
-#   python -m pip install --user -r tabularium/engine/requirements-observability.txt
+# Compatibility subset; source of truth: observability in root pyproject.toml.
+# From the repository root in an activated virtualenv:
+#   python -m pip install -e ".[observability]"
 
 # Measured footprint of the two packages below, resolved into a clean venv:
 #   opentelemetry-api  opentelemetry-sdk  opentelemetry-semantic-conventions

@@ -21,7 +21,7 @@ Requirements: Python 3.12+, git with `user.name` and `user.email` set.
 ```bash
 git clone https://github.com/kaaan11/Tabularium.git && cd Tabularium
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[runtime]"
+python -m pip install -e ".[runtime,dev]"
 
 cp -r examples/demo-project /tmp/demo && cd /tmp/demo
 git init -q && git add -A && git commit -qm "demo"
@@ -139,10 +139,24 @@ Experimental: `--workflow dag`, the `tui`, and the `interop`, `remote` and
 
 ## Development
 
+[pyproject.toml](pyproject.toml) is the dependency source of truth: base installs
+PyYAML; optional extras are `api` (LiteLLM), `runtime` (LangGraph and SQLite
+checkpointer), `observability` (OpenTelemetry and Langfuse), and `dev` (Pydantic,
+pytest and pytest-subtests). The tour includes `dev` so the demo's configured
+pytest command is available. See the [engine package map](tabularium/engine/README.md)
+for component boundaries.
+
+From the repository root, in an activated Python 3.12+ virtualenv on Linux:
+
 ```bash
-pip install -e ".[api,runtime,observability,dev]"
+python -m pip install -e ".[api,runtime,observability,dev]"
 python -m pytest tests -q
 ```
+
+The public [CI workflow](.github/workflows/ci.yml) uses Linux, Python 3.12/3.13
+and bubblewrap with usable unprivileged user namespaces. The full suite includes
+[documentation drift checks](tests/test_packaging_drift.py) against the public
+checkout; run them after exporting the repository and before publishing.
 
 The default run is fixture-tested only: it makes no provider or model calls
 and needs no credentials. Live smoke checks against real workers are opt-in:
