@@ -78,7 +78,8 @@ def run_instruction(instruction: str, path: str | Path | None = None,
                     change: bool = False,
                     confirm: Callable[[str], bool] | None = None,
                     custom_verifier: Any = None,
-                    pre_apply_hook: Any = None) -> ProductResult:
+                    pre_apply_hook: Any = None,
+                    allow_untested: bool = False) -> ProductResult:
     """Run one instruction through M2 → M3 → M4 using one selected worker.
 
     The optional adapter seam exists for deterministic product tests. Worker
@@ -145,6 +146,7 @@ def run_instruction(instruction: str, path: str | Path | None = None,
             confirm=confirm,
             custom_verifier=custom_verifier,
             pre_apply_hook=pre_apply_hook,
+            allow_untested=allow_untested,
         )
 
     selected, selection_error = _select_worker(
@@ -882,6 +884,11 @@ def build_execution_report_proposal(target: Path | str,
             f"- Decision: {change_info.get('decision', '')}\n"
             f"- Apply Result: {change_info.get('apply_result', '')}"
         )
+        tests = change_info.get("tests")
+        if isinstance(tests, dict):
+            override = (" (untested change allowed by --allow-untested)"
+                        if tests.get("untested_override") else "")
+            validation_text += f"\n- Tests: {tests.get('status', '')}{override}"
 
     spec = ReportSpec(
         title=report_title,

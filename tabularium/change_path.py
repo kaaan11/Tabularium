@@ -17,7 +17,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from tabularium.change_config import ChangeConfig, ChangeConfigError, config_digest, load_change_config
+from tabularium.change_config import (
+    ChangeConfig, ChangeConfigError, TESTS_NOT_CONFIGURED,
+    TESTS_NOT_CONFIGURED_MESSAGE, config_digest, load_change_config,
+)
 from tabularium.terminal import sanitize_terminal
 from tabularium.engine.code_gate.changeset import MAX_FILES, apply_changeset_transactional
 from tabularium.engine.code_gate import (
@@ -29,9 +32,12 @@ from tabularium.engine.code_gate import (
 from tabularium.engine.code_gate.isolated_run import SandboxError, run_tests_on_copy
 from tabularium.engine.execution.model import ExecutionPlan, PipelineResult
 from tabularium.engine.execution.pipeline import start_execution
-from tabularium.engine.workers.api import APIWorker, ModelTarget
+from tabularium.engine.workers.api import ModelTarget
 from tabularium.engine.workers.cli.opencode_worker import OpenCodeCLIWorker, find_opencode_executable
 from tabularium.engine.workers.cli.worker import NativeCLIWorker, find_native_executable
+
+
+_API_WORKER_NAMES = frozenset({"api", "api-model", "litellm"})
 
 
 def resolve_test_command(target: Path | str, command: list[str]) -> list[str]:
@@ -444,9 +450,24 @@ def run_change_path(
     custom_verifier: Callable[[dict[str, str]], tuple[bool, str]] | None = None,
     pre_apply_hook: Callable[[], None] | None = None,
     report_persister: Callable[..., Any] | None = None,
+    allow_untested: bool = False,
 ) -> Any:
     """Run one instruction in an isolated worktree with security gate and single confirmation."""
     from tabularium.execution import ProductResult, _from_pipeline
+
+    # 0. The API worker returns text and writes no files, while this path reads
+    # the change from the worktree diff. Refuse it before any provider call.
+    choice = (worker_name or "").strip().casefold()
+    adapter_category = getattr(getattr(adapter, "descriptor", None), "category", "")
+    if adapter_category == "API_MODEL" or (adapter is None and choice in _API_WORKER_NAMES):
+        return ProductResult(
+            status="REFUSED",
+            code="CHANGE_WORKER_UNSUPPORTED",
+            message=("--change needs a worker that edits files: use --worker native "
+                     "(Codex CLI) or --worker opencode. The API worker only returns "
+                     "text; run without --change to use it."),
+            target=str(target),
+        )
 
     # 1. Preflight check: git repository and clean tracked files
     clean, err_code, base_commit_or_msg = check_git_clean(target)
@@ -486,6 +507,15 @@ def run_change_path(
             status="REFUSED",
             code="CHANGE_CONFIG_INVALID",
             message=f"Invalid change configuration: {exc}",
+            target=str(target),
+        )
+    # No configured verification: refuse unless the person explicitly allowed
+    # an untested change for this run (a choice separate from approving the diff).
+    if change_cfg is None and not allow_untested:
+        return ProductResult(
+            status="REFUSED",
+            code=TESTS_NOT_CONFIGURED,
+            message=TESTS_NOT_CONFIGURED_MESSAGE,
             target=str(target),
         )
 
@@ -547,7 +577,6 @@ def run_change_path(
             if hasattr(selected_worker, "cwd"):
                 selected_worker.cwd = str(worktree_dir)
         else:
-            choice = (worker_name or "").strip().casefold()
             selected_model = (model or os.environ.get("TABU_MODEL") or "").strip()
             if choice in {"native", "codex", "codex-cli"}:
                 exe = find_native_executable()
@@ -586,20 +615,6 @@ def run_change_path(
                     cwd=worktree_dir,
                     change_mode=True,
                 )
-            elif choice in {"api", "api-model", "litellm"}:
-                if not selected_model:
-                    if is_auto_task and task_id:
-                        _finalize_candidate_task(
-                            target, task_id, status="CANCELLED", reason_code="WORKER_CONFIGURATION_MISSING"
-                        )
-                    return ProductResult(
-                        status="REFUSED",
-                        code="WORKER_CONFIGURATION_MISSING",
-                        message="The API worker requires a resolved model.",
-                        target=str(target),
-                        warnings=tuple(warnings),
-                    )
-                selected_worker = APIWorker(model_target=ModelTarget(selected_model))
             elif choice:
                 if is_auto_task and task_id:
                     _finalize_candidate_task(
@@ -608,7 +623,7 @@ def run_change_path(
                 return ProductResult(
                     status="REFUSED",
                     code="WORKER_SELECTION_INVALID",
-                    message=f"Unknown worker '{worker_name}'; choose native, opencode or api.",
+                    message=f"Unknown worker '{worker_name}'; choose native or opencode.",
                     target=str(target),
                     warnings=tuple(warnings),
                 )
@@ -627,8 +642,6 @@ def run_change_path(
                             cwd=worktree_dir,
                             change_mode=True,
                         )
-                    elif selected_model:
-                        selected_worker = APIWorker(model_target=ModelTarget(selected_model))
                     else:
                         if is_auto_task and task_id:
                             _finalize_candidate_task(
@@ -637,7 +650,8 @@ def run_change_path(
                         return ProductResult(
                             status="REFUSED",
                             code="WORKER_SELECTION_REQUIRED",
-                            message="No suitable worker available for --change.",
+                            message=("No suitable worker available for --change: install the "
+                                     "Codex CLI or OpenCode (--worker api cannot edit files)."),
                             target=str(target),
                             warnings=tuple(warnings),
                         )
@@ -917,6 +931,7 @@ def run_change_path(
                         "duration_s": test_duration,
                         "timed_out": False,
                         "truncated": False,
+                        "untested_override": False,
                     },
                 }
                 return ProductResult(
@@ -952,6 +967,7 @@ def run_change_path(
                     "duration_s": test_duration,
                     "timed_out": run_res.timed_out,
                     "truncated": run_res.truncated,
+                    "untested_override": False,
                 }
                 change_info = {
                     "proposal": proposal,
@@ -978,9 +994,11 @@ def run_change_path(
                 "duration_s": test_duration,
                 "timed_out": False,
                 "truncated": run_res.truncated,
+                "untested_override": False,
             }
         else:
-            no_cfg_warn = "Tests: NOT RUN (no .ai/change.yaml)"
+            no_cfg_warn = ("Tests: NOT RUN (no .ai/change.yaml; "
+                           "untested change allowed by --allow-untested)")
             warnings.append(no_cfg_warn)
             test_info = {
                 "status": "NOT_CONFIGURED",
@@ -988,12 +1006,13 @@ def run_change_path(
                 "duration_s": 0.0,
                 "timed_out": False,
                 "truncated": False,
+                "untested_override": True,
             }
 
         if change_cfg is not None:
             print(f"Tests: PASSED ({test_duration:.2f} s)")
         else:
-            print("Tests: NOT RUN (no .ai/change.yaml)")
+            print(no_cfg_warn)
 
         if confirm is not None:
             approved = confirm("Uygula? [y/N]")
@@ -1183,7 +1202,7 @@ def run_change_path(
         if change_cfg is not None:
             tests_line = f"Tests: passed ({' '.join(change_cfg.test_command)})"
         else:
-            tests_line = "Tests: not configured"
+            tests_line = "Tests: not run (no .ai/change.yaml; --allow-untested)"
         message = (f"tabu: {subject}\n\n"
                    f"Task: {task_id or '-'}\n"
                    f"Approved-by: {actor} at {now_iso}\n"

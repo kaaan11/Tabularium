@@ -12,6 +12,12 @@ from typing import Any
 import yaml
 
 CHANGE_CONFIG_INVALID = "CHANGE_CONFIG_INVALID"
+TESTS_NOT_CONFIGURED = "TESTS_NOT_CONFIGURED"
+TESTS_NOT_CONFIGURED_MESSAGE = (
+    "No test command is configured (.ai/change.yaml). --change is refused unless "
+    "you add .ai/change.yaml with a test_command, or pass --allow-untested "
+    "to permit an untested change for this run. Diff approval is still required."
+)
 DEFAULT_TIMEOUT_SECONDS = 300
 MIN_TIMEOUT_SECONDS = 1
 MAX_TIMEOUT_SECONDS = 1800

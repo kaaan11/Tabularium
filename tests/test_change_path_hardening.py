@@ -37,7 +37,7 @@ class TestHostileWorktree(ChangePathFixture):
 
     def _run(self, mutate, confirm=lambda _: True):
         return run_instruction("x", self.root, adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                               change=True, confirm=confirm)
+                               change=True, allow_untested=True, confirm=confirm)
 
     def test_redirected_gitdir_cannot_run_code(self):
         """B-02: a worker that only writes files must not get git to run its fsmonitor."""
@@ -225,7 +225,7 @@ class TestCandidateTaskNeverLeaks(ChangePathFixture):
         adapter = adapter or FakeWorkerAdapter(mutate_fn=mutate)
         try:
             result = run_instruction("change something", self.root, adapter=adapter,
-                                     change=True, confirm=lambda _: True, **kw)
+                                     change=True, allow_untested=True, confirm=lambda _: True, **kw)
         except BaseException as exc:  # noqa: BLE001 - the path under test
             result = exc
         return result, self._new_task_statuses(before)
@@ -271,7 +271,7 @@ class TestCandidateTaskNeverLeaks(ChangePathFixture):
         with self.assertRaises(KeyboardInterrupt):
             run_instruction("change something", self.root,
                             adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                            change=True, confirm=interrupt)
+                            change=True, allow_untested=True, confirm=interrupt)
         self.assertAllTerminal(self._new_task_statuses(before))
 
     def test_candidate_keeps_full_multiline_instruction_and_reason(self):
@@ -288,7 +288,7 @@ class TestCandidateTaskNeverLeaks(ChangePathFixture):
 
         before = {f.name for f in (self.root / ".ai" / "tasks").glob("TASK-*.md")}
         run_instruction(instruction, self.root, adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                        change=True, confirm=lambda _: False)
+                        change=True, allow_untested=True, confirm=lambda _: False)
         new = [f for f in (self.root / ".ai" / "tasks").glob("TASK-*.md") if f.name not in before]
         self.assertEqual(len(new), 1)
         rec = read_frontmatter(new[0], self.root, "Task")
@@ -306,7 +306,7 @@ class TestChangePathPreflightAndIntegrity(ChangePathFixture):
     def _run(self, mutate=None, **kw):
         asked = []
         kw.setdefault("adapter", FakeWorkerAdapter(mutate_fn=mutate))
-        result = run_instruction("x", self.root, change=True,
+        result = run_instruction("x", self.root, change=True, allow_untested=True,
                                  confirm=lambda q: asked.append(q) or True, **kw)
         return result, asked
 
@@ -355,7 +355,7 @@ class TestChangePathPreflightAndIntegrity(ChangePathFixture):
         self.assertFalse(ran.exists(), "a worker-written .gitattributes selected a filter")
 
     def test_unknown_worker_is_refused_and_closes_candidate(self):
-        result = run_instruction("x", self.root, worker="bogus", change=True,
+        result = run_instruction("x", self.root, worker="bogus", change=True, allow_untested=True,
                                  confirm=lambda _: True)
         self.assertEqual(result.code, "WORKER_SELECTION_INVALID")
         from tabularium.task import read_frontmatter
@@ -367,14 +367,14 @@ class TestChangePathPreflightAndIntegrity(ChangePathFixture):
     def test_task_id_must_be_canonical(self):
         for bad in ("../../outside", "TASK-2026-0001/../../x", "task-2026-0001"):
             with self.subTest(task=bad):
-                result = run_instruction("x", self.root, task_id=bad, change=True,
+                result = run_instruction("x", self.root, task_id=bad, change=True, allow_untested=True,
                                          adapter=FakeWorkerAdapter(mutate_fn=lambda wt: None),
                                          confirm=lambda _: True)
                 self.assertEqual(result.code, "TASK_ID_INVALID")
 
     def test_target_must_be_repository_root(self):
         sub = self.root / "src"
-        result = run_instruction("x", sub, change=True,
+        result = run_instruction("x", sub, change=True, allow_untested=True,
                                  adapter=FakeWorkerAdapter(mutate_fn=lambda wt: None),
                                  confirm=lambda _: True)
         self.assertNotEqual(result.code, "COMPLETED")
@@ -418,7 +418,7 @@ class TestAutoCommit(ChangePathFixture):
         def mutate(wt: Path):
             (wt / "src" / "sample.py").write_text(content)
         return run_instruction(instruction, self.root, adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                               change=True, confirm=confirm)
+                               change=True, allow_untested=True, confirm=confirm)
 
     def test_applied_change_is_committed_with_its_records(self):
         head = self._git("rev-parse", "HEAD").strip()
@@ -489,7 +489,7 @@ class TestChangeSetIntegration(ChangePathFixture):
     def test_every_file_of_the_change_set_is_committed(self):
         result = run_instruction("function and its test", self.root,
                                  adapter=FakeWorkerAdapter(mutate_fn=self._two_files),
-                                 change=True, confirm=lambda _: True)
+                                 change=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.code, "COMPLETED", result.message)
         files = set(self._git("show", "--name-only", "--format=", "HEAD").split())
         self.assertIn("src/sample.py", files)
@@ -513,7 +513,7 @@ class TestChangeSetIntegration(ChangePathFixture):
         with patch.object(changeset.os, "replace", side_effect=spy):
             result = run_instruction("function and its test", self.root,
                                      adapter=FakeWorkerAdapter(mutate_fn=self._two_files),
-                                     change=True, confirm=lambda _: True)
+                                     change=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.code, "COMPLETED", result.message)
         self.assertEqual(seen, [True, True])
         self.assertFalse(journal.exists())
@@ -522,7 +522,7 @@ class TestChangeSetIntegration(ChangePathFixture):
         journal = self.root / ".git" / "tabu-apply.journal"
         journal.write_text('{"files": []}')
         worker = FakeWorkerAdapter(mutate_fn=self._two_files)
-        result = run_instruction("x", self.root, adapter=worker, change=True,
+        result = run_instruction("x", self.root, adapter=worker, change=True, allow_untested=True,
                                  confirm=lambda _: True)
         self.assertEqual(result.code, "INTERRUPTED_APPLY")
         self.assertEqual(worker.call_count, 0)
@@ -546,7 +546,7 @@ class TestChangePathDiffAndOpencodeIntegration(ChangePathFixture):
             (wt / "b" / "x.py").write_text("x = 1\n")
 
         result = run_instruction("x", self.root, adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                                 change=True, confirm=lambda _: True)
+                                 change=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.code, "COMPLETED", result.message)
         self.assertEqual((self.root / "b" / "x.py").read_text(), "x = 1\n")
         self.assertFalse((self.root / "x.py").exists())
@@ -560,7 +560,7 @@ class TestChangePathDiffAndOpencodeIntegration(ChangePathFixture):
             (wt / "src" / "sample.py").write_text("changed\n")
 
         result = run_instruction("x", self.root, adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                                 change=True, confirm=lambda _: True)
+                                 change=True, allow_untested=True, confirm=lambda _: True)
         self.assertIsNone(result.change_result["commit"])
         self.assertEqual(self._git("diff", "--cached", "--name-only").strip(), "")
         self.assertEqual(self.src_file.read_text(), "changed\n")
@@ -630,7 +630,7 @@ class TestChangePathCommitBoundary(ChangePathFixture):
             (wt / "*").write_text("star\n")
 
         result = run_instruction("x", self.root, adapter=FakeWorkerAdapter(mutate_fn=mutate),
-                                 change=True, confirm=lambda _: True)
+                                 change=True, allow_untested=True, confirm=lambda _: True)
         self.assertEqual(result.code, "COMPLETED", result.message)
         files = set(self._git("show", "--name-only", "--format=", "HEAD").split("\n")) - {""}
         self.assertNotIn("notes-untracked.txt", files)
@@ -641,7 +641,7 @@ class TestChangePathCommitBoundary(ChangePathFixture):
         from unittest.mock import patch
         worker = FakeWorkerAdapter(mutate_fn=lambda wt: None)
         with patch("tabularium.change_path.apply_journal_path", return_value=None):
-            result = run_instruction("x", self.root, adapter=worker, change=True,
+            result = run_instruction("x", self.root, adapter=worker, change=True, allow_untested=True,
                                      confirm=lambda _: True)
         self.assertEqual(result.code, "JOURNAL_UNAVAILABLE")
         self.assertEqual(worker.call_count, 0)

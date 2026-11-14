@@ -69,7 +69,7 @@ tabu run "add kelvin conversions" --change
    configuration files, agent configuration (`.claude`, `.codex`,
    `opencode.json`) and key or `.env` files are refused. A change can touch at
    most 20 files.
-3. If `.ai/change.yaml` names a test command, your tests run against a
+3. `.ai/change.yaml` must name a test command. Your tests run against a
    disposable copy of the project with the change applied, inside a bubblewrap
    sandbox with no network. A failing or timed-out test refuses the change.
 4. You see the diff and the test result, and answer once. `y` applies the change
@@ -82,12 +82,27 @@ timeout_seconds: 300   # optional, 1-1800
 ```
 
 `test_command` is an argument list, not a shell line. Without `.ai/change.yaml`,
-tests are skipped with a warning. `tabu onboard` can create this file during
-onboarding; for an already onboarded project, create it by hand.
+`--change` refuses with `TESTS_NOT_CONFIGURED` before starting a worker or
+creating a Task. `tabu onboard` can create this file during onboarding; for an
+already onboarded project, create it by hand.
 
-`--change` needs a clean working tree and a worker: the Codex CLI (`codex` on
-`PATH`, the default when present), OpenCode (`--worker opencode`), or an API
-model through LiteLLM (`--worker api`, `pip install -e ".[api]"`).
+To explicitly permit an untested change for one run, use
+`tabu run "add kelvin conversions" --change --allow-untested`. This is separate
+from approving the diff: you still review and confirm it. The warning, execution
+report, and commit record that tests were **not run** and that the override was
+used. Non-interactive runs cannot apply changes, even with the override. Invalid
+configuration, sandbox errors, failing tests, and timeouts still refuse the change.
+
+`tabu explain "add kelvin conversions" --change` and
+`tabu run "add kelvin conversions" --change --dry-run` diagnose test readiness
+without starting a worker, running tests, or writing files. A configured command
+has not yet passed; even passing tests do not prove semantic correctness.
+
+`--change` needs a clean working tree and a worker that edits files: the Codex
+CLI (`codex` on `PATH`, the default when present) or OpenCode
+(`--worker opencode`). The API worker (`--worker api`) only returns text, so
+`--change --worker api` is refused with `CHANGE_WORKER_UNSUPPORTED` before any
+provider call; use it without `--change`.
 
 ## What it guarantees, and what it does not
 
