@@ -103,6 +103,14 @@ model through LiteLLM (`--worker api`, `pip install -e ".[api]"`).
   write nothing.
 - **Gated changes.** `--change` applies nothing you did not see and confirm,
   and nothing that failed the gates or your tests.
+- **Project mutations are serialized.** `run` (including `--change`), `continue`,
+  Task creation/transitions/approval, initialization, onboarding writes, and record
+  persistence share a nonblocking advisory lock. It spans preflight through
+  approval, tests, apply, report/commit writing, and cleanup. Linked Git worktrees
+  share their repository's lock. A concurrent mutation is refused with
+  `PROJECT_BUSY` and holder details; retry when it finishes. Read-only diagnostics,
+  Task inspection, `task create --print`, and onboarding proposals stay available.
+  External editors and Git commands must still be coordinated separately.
 
 **Not guaranteed:**
 
@@ -111,8 +119,19 @@ model through LiteLLM (`--worker api`, `pip install -e ".[api]"`).
   protects your checkout, not your machine. Only the test run is sandboxed.
 - **Correctness is not verified.** Passing your tests is the only
   correctness signal. A reviewed diff is still your responsibility.
-- **No concurrency control.** Do not run two Tabularium operations on one project at
-  once.
+- **Crash recovery is manual.** A killed process releases its OS lock but leaves
+  an owner record; the next mutation refuses with `PROJECT_LOCK_STALE`. Inspect
+  `git status` / `git diff`, any `tabu-apply.journal` in the Git common directory,
+  `git worktree list` for abandoned worktrees, and `tabu task list` for unfinished
+  candidate Tasks. For a journal, inspect every listed file, restore or keep its
+  changes, and delete the journal only after resolving that interrupted apply.
+  Remove abandoned worktrees and prune their Git metadata. After inspection,
+  delete only the owner record named in the diagnostic, then resolve unfinished
+  Tasks through their normal lifecycle commands before retrying the run. Never delete
+  `tabu-project.lock`: its inode must remain stable. Lock errors fail closed with
+  `PROJECT_LOCK_UNAVAILABLE`. Git repositories store both files in their common
+  Git directory; non-Git projects use a canonical-path hash under private per-user
+  temporary storage (`tabularium-project-locks-<uid>`).
 - **Live providers are not tested.** Worker integrations are covered by
   offline fixtures. A given provider or CLI version may still fail.
 - **No automation of approvals.** Task transitions (`start`, `approve`,

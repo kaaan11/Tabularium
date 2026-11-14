@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from tabularium.project_lock import serialized_execution
 from tabularium.change_config import ChangeConfig, ChangeConfigError, config_digest, load_change_config
 from tabularium.terminal import sanitize_terminal
 from tabularium.engine.code_gate.changeset import MAX_FILES, apply_changeset_transactional
@@ -428,6 +429,7 @@ def unsupported_diff_reason(raw_diff: str, parsed_count: int) -> str:
     return ""
 
 
+@serialized_execution("target")
 def run_change_path(
     target: Path,
     instruction: str,
