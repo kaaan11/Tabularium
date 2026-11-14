@@ -92,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--persist", action="store_true",
                             help="propose and record an execution Report in .ai/reports upon completion")
     run_parser.add_argument("--change", action="store_true", default=False,
-                            help="allow worker to modify codebase via a governed worktree diff, security gate, and single human confirmation")
+                            help="allow worker to modify codebase via a governed worktree diff, security gate, and single human confirmation (native or opencode worker; --worker api is refused)")
     run_parser.add_argument("--workflow", default=None,
                             help="execution orchestration: single (default) or "
                                  "dag (governed multi-agent, DEC-2026-0010); "

@@ -85,9 +85,11 @@ timeout_seconds: 300   # optional, 1-1800
 tests are skipped with a warning. `tabu onboard` can create this file during
 onboarding; for an already onboarded project, create it by hand.
 
-`--change` needs a clean working tree and a worker: the Codex CLI (`codex` on
-`PATH`, the default when present), OpenCode (`--worker opencode`), or an API
-model through LiteLLM (`--worker api`, `pip install -e ".[api]"`).
+`--change` needs a clean working tree and a worker that edits files: the Codex
+CLI (`codex` on `PATH`, the default when present) or OpenCode
+(`--worker opencode`). The API worker (`--worker api`) only returns text, so
+`--change --worker api` is refused with `CHANGE_WORKER_UNSUPPORTED` before any
+provider call; use it without `--change`.
 
 ## What it guarantees, and what it does not
 

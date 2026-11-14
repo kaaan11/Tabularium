@@ -29,9 +29,12 @@ from tabularium.engine.code_gate import (
 from tabularium.engine.code_gate.isolated_run import SandboxError, run_tests_on_copy
 from tabularium.engine.execution.model import ExecutionPlan, PipelineResult
 from tabularium.engine.execution.pipeline import start_execution
-from tabularium.engine.workers.api import APIWorker, ModelTarget
+from tabularium.engine.workers.api import ModelTarget
 from tabularium.engine.workers.cli.opencode_worker import OpenCodeCLIWorker, find_opencode_executable
 from tabularium.engine.workers.cli.worker import NativeCLIWorker, find_native_executable
+
+
+_API_WORKER_NAMES = frozenset({"api", "api-model", "litellm"})
 
 
 def resolve_test_command(target: Path | str, command: list[str]) -> list[str]:
@@ -448,6 +451,20 @@ def run_change_path(
     """Run one instruction in an isolated worktree with security gate and single confirmation."""
     from tabularium.execution import ProductResult, _from_pipeline
 
+    # 0. The API worker returns text and writes no files, while this path reads
+    # the change from the worktree diff. Refuse it before any provider call.
+    choice = (worker_name or "").strip().casefold()
+    adapter_category = getattr(getattr(adapter, "descriptor", None), "category", "")
+    if adapter_category == "API_MODEL" or (adapter is None and choice in _API_WORKER_NAMES):
+        return ProductResult(
+            status="REFUSED",
+            code="CHANGE_WORKER_UNSUPPORTED",
+            message=("--change needs a worker that edits files: use --worker native "
+                     "(Codex CLI) or --worker opencode. The API worker only returns "
+                     "text; run without --change to use it."),
+            target=str(target),
+        )
+
     # 1. Preflight check: git repository and clean tracked files
     clean, err_code, base_commit_or_msg = check_git_clean(target)
     if not clean:
@@ -547,7 +564,6 @@ def run_change_path(
             if hasattr(selected_worker, "cwd"):
                 selected_worker.cwd = str(worktree_dir)
         else:
-            choice = (worker_name or "").strip().casefold()
             selected_model = (model or os.environ.get("TABU_MODEL") or "").strip()
             if choice in {"native", "codex", "codex-cli"}:
                 exe = find_native_executable()
@@ -586,20 +602,6 @@ def run_change_path(
                     cwd=worktree_dir,
                     change_mode=True,
                 )
-            elif choice in {"api", "api-model", "litellm"}:
-                if not selected_model:
-                    if is_auto_task and task_id:
-                        _finalize_candidate_task(
-                            target, task_id, status="CANCELLED", reason_code="WORKER_CONFIGURATION_MISSING"
-                        )
-                    return ProductResult(
-                        status="REFUSED",
-                        code="WORKER_CONFIGURATION_MISSING",
-                        message="The API worker requires a resolved model.",
-                        target=str(target),
-                        warnings=tuple(warnings),
-                    )
-                selected_worker = APIWorker(model_target=ModelTarget(selected_model))
             elif choice:
                 if is_auto_task and task_id:
                     _finalize_candidate_task(
@@ -608,7 +610,7 @@ def run_change_path(
                 return ProductResult(
                     status="REFUSED",
                     code="WORKER_SELECTION_INVALID",
-                    message=f"Unknown worker '{worker_name}'; choose native, opencode or api.",
+                    message=f"Unknown worker '{worker_name}'; choose native or opencode.",
                     target=str(target),
                     warnings=tuple(warnings),
                 )
@@ -627,8 +629,6 @@ def run_change_path(
                             cwd=worktree_dir,
                             change_mode=True,
                         )
-                    elif selected_model:
-                        selected_worker = APIWorker(model_target=ModelTarget(selected_model))
                     else:
                         if is_auto_task and task_id:
                             _finalize_candidate_task(
@@ -637,7 +637,8 @@ def run_change_path(
                         return ProductResult(
                             status="REFUSED",
                             code="WORKER_SELECTION_REQUIRED",
-                            message="No suitable worker available for --change.",
+                            message=("No suitable worker available for --change: install the "
+                                     "Codex CLI or OpenCode (--worker api cannot edit files)."),
                             target=str(target),
                             warnings=tuple(warnings),
                         )
