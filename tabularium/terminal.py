@@ -36,3 +36,35 @@ def sanitize_terminal(text: str) -> str:
         else:
             out.append(ch)
     return "".join(out)
+
+
+# Output-boundary bound for one surfaced diagnostic fragment. Mirrors the
+# established per-diagnostic detail bound already used for worker-facing
+# context diagnostics in tabularium/engine/execution/pipeline.py (_context_gate).
+_DIAGNOSTIC_MAX_CHARS = 160
+
+
+def _sanitize_fragment(text: str, *,
+                       limit: int = _DIAGNOSTIC_MAX_CHARS) -> str:
+    """Make one user-derived diagnostic fragment terminal-safe and bounded.
+
+    Every non-printable character (C0/C1 controls, DEL, Unicode line and
+    format separators included) becomes its visible ``ascii()`` escape, so a
+    record can never inject terminal control sequences or fabricate extra
+    output lines. Whitespace runs collapse deterministically and the fragment
+    is hard-bounded to ``limit``. Escaping runs BEFORE truncation, so no live
+    escape sequence can be split. This is the user-facing representation only;
+    internal validation evidence is never rewritten.
+
+    The default limit is the established Task-diagnostic bound; callers may
+    pass a larger bound when the evidence was already stored under that larger
+    bound elsewhere (worker failure detail uses the worker-side 300).
+    """
+    if not isinstance(text, str):
+        return ""
+    escaped = "".join(ch if ch.isprintable() else ascii(ch)[1:-1]
+                      for ch in text)
+    collapsed = " ".join(escaped.split())
+    if len(collapsed) > limit:
+        return collapsed[:limit - 3].rstrip() + "..."
+    return collapsed

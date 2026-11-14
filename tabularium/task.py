@@ -40,9 +40,9 @@ from tabularium.engine.context_loader.discovery import (
 )
 from tabularium.engine.context_loader.validate import SUPPORTED_VERSION
 
-from .execution import _sanitize_fragment
 from .init import InitError, _canonical_target
 from .project_lock import serialized_project
+from .terminal import _sanitize_fragment
 
 # Reason codes reused from the frozen loader taxonomy wherever it can express
 # the outcome; two product-level codes name what only the CLI surface sees.
