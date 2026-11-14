@@ -1,13 +1,14 @@
 # Development and test dependencies (M3.2).
 #
 # These are NOT runtime dependencies of the M2 Context Loader. The loader's
-# runtime surface is defined solely by tabularium/engine/requirements.txt and remains
+# runtime surface is defined by the base dependencies in root pyproject.toml and remains
 # PyYAML only; nothing in tabularium/engine/context_loader/ imports anything from this
 # file. Installing it is required to run the shadow-contract and golden
 # conformance tests, not to run the loader.
 #
-# Declared, not installed globally by this repository.
-#   python -m pip install --user -r tabularium/engine/requirements-dev.txt
+# Compatibility subset; the dev extra in root pyproject.toml also includes
+# pytest and pytest-subtests. From the repository root in an activated virtualenv:
+#   python -m pip install -e ".[dev]"
 
 # Executable shadow contracts (tabularium/engine/shadow_contracts).
 # Pydantic v2 is required: the shadow models rely on strict mode and on the

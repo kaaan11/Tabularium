@@ -1,4 +1,5 @@
-# Runtime dependency for tabularium/engine/context_loader (M2.4).
-# Declared, not installed globally by this repository.
-#   python -m pip install --user -r tabularium/engine/requirements.txt
+# Compatibility subset for tabularium/engine/context_loader (M2.4).
+# Source of truth: base dependencies in the root pyproject.toml.
+# From the repository root in an activated virtualenv:
+#   python -m pip install -e .
 PyYAML>=6.0
