@@ -9,7 +9,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from tabularium.engine.context_loader.confinement import ProjectScope
 from tabularium.engine.context_loader.discovery import TERMINAL_TASK_STATUSES, discover
