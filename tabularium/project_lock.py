@@ -235,7 +235,9 @@ def _lock_directory(target: Path) -> Path:
         return git_dir
     # Non-Git projects support Tasks and report persistence too. Keep their
     # permanent lock inode outside the project, in a private per-user directory.
-    base = Path(tempfile.gettempdir()) / f"tabularium-project-locks-{getattr(os, 'getuid', lambda: 0)()}"
+    # POSIX contenders must agree on the lock inode even with different TMPDIRs.
+    temp_root = Path("/tmp" if os.name == "posix" else tempfile.gettempdir())
+    base = temp_root / f"tabularium-project-locks-{getattr(os, 'getuid', lambda: 0)()}"
     try:
         base.mkdir(mode=0o700, exist_ok=True)
         info = base.lstat()

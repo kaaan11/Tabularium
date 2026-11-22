@@ -320,7 +320,9 @@ class TestConcurrentChange(ProjectLockFixture):
 
     def test_non_git_project_task_mutations_are_serialized(self):
         shutil.rmtree(self.root / ".git")
-        proc = self.start_child(_task_holder_child, (str(self.root), str(self.sync)))
+        # The spawned holder runs with a different temp directory than the contender.
+        with patch.dict(os.environ, {"TMPDIR": str(self.sync)}):
+            proc = self.start_child(_task_holder_child, (str(self.root), str(self.sync)))
         try:
             self.assertTrue(_wait_for(lambda: (self.sync / "task.in").exists()))
             result = task.task_approve(self.root, self.task_id)

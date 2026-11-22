@@ -83,11 +83,9 @@ class ControlledEnvironmentTestCase(unittest.TestCase):
         _setup_project(self.root)
 
         # 2. Create isolated TMPDIR specifically for checkpoints and traces
-        self._orig_tmpdir = os.environ.get("TMPDIR")
         self._orig_tempfile_tempdir = tempfile.tempdir
         self.tmp_holder = tempfile.TemporaryDirectory(prefix="tabu-sec-tmp-")
         self.isolated_tmp = Path(self.tmp_holder.name)
-        os.environ["TMPDIR"] = str(self.isolated_tmp)
         tempfile.tempdir = str(self.isolated_tmp)
 
         self._orig_umask = os.umask(0o022)
@@ -98,16 +96,15 @@ class ControlledEnvironmentTestCase(unittest.TestCase):
             patcher = patch(f"tabularium.execution.{name}", return_value=None)
             patcher.start()
             self.addCleanup(patcher.stop)
-        env = patch.dict(os.environ, {"TABU_MODEL": "test-provider/test-model"})
+        env = patch.dict(os.environ, {
+            "TABU_MODEL": "test-provider/test-model",
+            "TMPDIR": str(self.isolated_tmp),
+        })
         env.start()
         self.addCleanup(env.stop)
 
     def tearDown(self):
         os.umask(self._orig_umask)
-        if self._orig_tmpdir is not None:
-            os.environ["TMPDIR"] = self._orig_tmpdir
-        else:
-            os.environ.pop("TMPDIR", None)
         tempfile.tempdir = self._orig_tempfile_tempdir
         self.proj_holder.cleanup()
         self.tmp_holder.cleanup()
