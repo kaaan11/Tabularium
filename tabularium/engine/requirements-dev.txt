@@ -7,7 +7,7 @@
 # conformance tests, not to run the loader.
 #
 # Compatibility subset; the dev extra in root pyproject.toml also includes
-# pytest and pytest-subtests. From the repository root in an activated virtualenv:
+# pytest. From the repository root in an activated virtualenv:
 #   python -m pip install -e ".[dev]"
 
 # Executable shadow contracts (tabularium/engine/shadow_contracts).

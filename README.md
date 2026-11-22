@@ -199,10 +199,10 @@ Experimental: `--workflow dag`, the `tui`, and the `interop`, `remote` and
 
 [pyproject.toml](pyproject.toml) is the dependency source of truth: base installs
 PyYAML; optional extras are `api` (LiteLLM), `runtime` (LangGraph and SQLite
-checkpointer), `observability` (OpenTelemetry and Langfuse), and `dev` (Pydantic,
-pytest and pytest-subtests). The tour includes `dev` so the demo's configured
-pytest command is available. See the [engine package map](tabularium/engine/README.md)
-for component boundaries.
+checkpointer), `observability` (OpenTelemetry and Langfuse), and `dev` (Pydantic
+and pytest). The tour includes `dev` so the demo's configured pytest command is
+available. See the [engine package map](tabularium/engine/README.md) for component
+boundaries.
 
 From the repository root, in an activated Python 3.12+ virtualenv on Linux:
 

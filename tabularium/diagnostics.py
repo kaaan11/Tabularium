@@ -59,7 +59,7 @@ _OPTIONAL_FALLBACKS = {
     "api": ("litellm",),
     "runtime": ("langgraph", "langgraph-checkpoint-sqlite"),
     "observability": ("opentelemetry-api", "opentelemetry-sdk"),
-    "dev": ("pydantic", "pytest", "pytest-subtests"),
+    "dev": ("pydantic", "pytest"),
 }
 
 

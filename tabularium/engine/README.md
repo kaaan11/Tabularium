@@ -44,7 +44,7 @@ covers setup and the bubblewrap (`bwrap`) requirement for sandboxed tests.
 | `api` | LiteLLM | Optional API worker (lazy import) |
 | `runtime` | LangGraph and SQLite checkpointer | Governed runtime |
 | `observability` | OpenTelemetry API/SDK and Langfuse | Optional exporters and SDK checks |
-| `dev` | Pydantic, pytest and pytest-subtests | Shadow contracts and tests |
+| `dev` | Pydantic and pytest | Shadow contracts and tests |
 
 For development with all extras:
 
