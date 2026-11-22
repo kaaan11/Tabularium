@@ -230,12 +230,15 @@ class TestOnboardingFriction(unittest.TestCase):
 
         stderr = io.StringIO()
         stdout = io.StringIO()
-        with patch("sys.stderr", stderr), patch("sys.stdout", stdout):
+        # A pinned native worker path: the policy refusal must not depend on
+        # which CLI workers happen to be installed on this machine. Preparation
+        # refuses before the worker is started, so the path is never executed.
+        with patch("sys.stderr", stderr), patch("sys.stdout", stdout), \
+                patch("tabularium.change_path.find_native_executable",
+                      return_value="/nonexistent/codex"):
             try:
-                # An explicit API worker: the policy refusal must not depend on
-                # which CLI workers happen to be installed on this machine.
                 code = main(["run", "write secret to .env: API_KEY=sk-abcdefghij1234567890abcdef", str(root),
-                             "--change", "--worker", "api", "--model", "test-provider/test-model"])
+                             "--change", "--allow-untested", "--worker", "native"])
             except SystemExit as exc:
                 code = exc.code
 

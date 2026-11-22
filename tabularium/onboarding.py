@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .project_lock import serialized_project
+
 from .init import (
     InitError,
     _canonical_target,
@@ -771,6 +773,9 @@ def apply_onboarding_proposal(target: Path, proposal: OnboardingProposal,
     return tuple(item.target_path for item in proposal.durable_proposals)
 
 
+@serialized_project("raw_target", lambda target, exc, args: OnboardingResult(
+    "REFUSED", str(target), code=exc.code, message=str(exc)),
+    read_only=lambda args: not args.get("authorizations"))
 def onboard_project(raw_target: str | Path | None = None,
                     declarations: Mapping[str, str] | None = None,
                     authorizations: Mapping[str, object] | None = None) -> OnboardingResult:

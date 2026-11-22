@@ -132,9 +132,15 @@ class HostileDisplayTests(SafetyFixture):
 class ConcurrencyAndAtomicityTests(SafetyFixture):
     def test_competing_allocation_writes_exactly_one_winner(self):
         """Two creators racing on the same candidate id: one publishes, the
-        other refuses; the store ends with exactly one new Task."""
+        other refuses; the store ends with exactly one new Task.
+
+        Exercise the underlying CAS defense independently of the project lock;
+        test_project_lock covers refusal at the public entry point.
+        """
+        import inspect
         import threading
 
+        create_without_project_lock = inspect.unwrap(T.task_create)
         barrier = threading.Barrier(2)
         results: list[T.TaskCreateResult] = []
 
@@ -148,8 +154,8 @@ class ConcurrencyAndAtomicityTests(SafetyFixture):
                 return real_link(src, dst, *a, **kw)
 
             with mock.patch.object(os, "link", slow_link):
-                results.append(T.task_create(self.root, title="Racer",
-                                             objective="o"))
+                results.append(create_without_project_lock(self.root, title="Racer",
+                                                           objective="o"))
 
         threads = [threading.Thread(target=contend) for _ in range(2)]
         for thread in threads:
@@ -184,8 +190,12 @@ class ConcurrencyAndAtomicityTests(SafetyFixture):
         def failing_fsync(fd):
             raise OSError("device full (fixture)")
 
-        with mock.patch.object(os, "fsync", failing_fsync):
-            result = T.task_create(self.root, title="T", objective="o")
+        from tabularium.project_lock import project_mutation
+
+        # Inject failure into the record write, after acquiring the real lock.
+        with project_mutation(self.root):
+            with mock.patch.object(os, "fsync", failing_fsync):
+                result = T.task_create(self.root, title="T", objective="o")
         self.assertEqual(result.code, "WRITE_FAILED")
         self.assertEqual([p.name for p in self.task_dir.iterdir()],
                          ["README.md"])
