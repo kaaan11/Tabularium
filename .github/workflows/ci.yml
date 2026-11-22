@@ -1,6 +1,6 @@
 # Continuous integration: tests on supported Python versions, a non-editable
 # wheel smoke test, generated-artifact hygiene, a bounded lint baseline and a
-# dependency vulnerability audit. Actions are pinned to release tags.
+# dependency vulnerability audit. Actions are pinned to full commit SHAs.
 name: ci
 
 on:
@@ -18,8 +18,8 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       # The sandboxed test runner needs bubblewrap. Ubuntu 24.04 restricts
       # unprivileged user namespaces through AppArmor; lift that for the job.
       - name: Install bubblewrap
@@ -42,8 +42,8 @@ jobs:
   wheel:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - name: Build and install a non-editable wheel
         run: |
           uv build --wheel --python 3.12
@@ -55,42 +55,40 @@ jobs:
   hygiene:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: No generated artifacts tracked
-        run: "! git ls-files | grep -E '(^|/)(__pycache__|build|dist)(/|$)|\\.pyc$|\\.egg-info'"
+        run: |
+          tracked=$(git ls-files)
+          if grep -E '(^|/)(__pycache__|build|dist)(/|$)|\.pyc$|\.egg-info(/|$)' <<< "$tracked"; then
+            exit 1
+          fi
 
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       # Bounded baseline: syntax errors and undefined names only (E9, F63, F7,
       # F82). Widen the rule set deliberately, in its own change.
-      # Known exceptions, each to be removed once fixed in code:
-      # - tabularium/execution.py F821: `Callable` is used in an annotation
-      #   but never imported.
-      # - tests/test_phase1_i7_explain_engine.py F823: `run_instruction` is
-      #   imported locally after a branch that already calls it.
       - name: Ruff (pinned)
         run: >-
           uvx ruff@0.8.6 check
           --select E9,F63,F7,F82
-          --config 'lint.per-file-ignores = {"tabularium/execution.py" = ["F821"], "tests/test_phase1_i7_explain_engine.py" = ["F823"]}'
           --output-format github
           tabularium tests
 
   dependency-audit:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       # Resolve the package with every extra, then audit the exact installed
       # versions against the PyPA advisory database. The local package itself
-      # is excluded because it is not published from this run.
+      # is excluded because it is not published to PyPI.
       - name: Resolve dependencies
         run: |
           uv venv --python 3.12 .venv
           uv pip install --python .venv ".[api,runtime,observability,dev]"
-          uv pip freeze --python .venv --exclude-editable | grep -v '^tabularium-os' > audit-requirements.txt
+          uv pip freeze --python .venv --exclude tabularium-os --strict > audit-requirements.txt
       - name: pip-audit (pinned)
         run: uvx pip-audit@2.7.3 --requirement audit-requirements.txt --no-deps --disable-pip --strict

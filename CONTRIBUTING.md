@@ -3,16 +3,16 @@
 Thanks for your interest in Tabularium. It is alpha software; interfaces and
 record formats may still change (see [CHANGELOG.md](CHANGELOG.md)).
 
-<!-- TODO(owner): state whether external pull requests are accepted now, and
-any expectations about response times for issues and reviews. -->
+External pull requests are welcome. Maintainers respond to issues and pull
+requests as time permits, with no guaranteed response time.
 
-Security problems are **not** reported through issues or pull requests. Follow
-[SECURITY.md](SECURITY.md).
+Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## Development setup
 
-Requirements: Linux, Python 3.12 or 3.13, git with `user.name` and
-`user.email` set, and `bubblewrap` (`bwrap`) for the sandboxed test runner.
+Use Linux, Python 3.12 or 3.13, and Git with `user.name` and `user.email` set.
+The isolation tests require bubblewrap (`bwrap`) and usable Linux namespaces.
+The remote worker tests use local loopback sockets.
 [uv](https://docs.astral.sh/uv/) is used below because CI uses it; plain
 `pip` in a virtual environment works too.
 
@@ -23,21 +23,17 @@ uv pip install --python .venv -e ".[api,runtime,observability,dev]"
 
 ## Checks
 
-These are the commands CI runs (`.github/workflows/ci.yml`). Run them before
-opening a pull request.
+Run these local equivalents of the CI checks before opening a pull request.
 
 ```bash
 # Full test suite. Sandbox tests skip when bwrap is unusable; CI treats
 # that skip as a failure, so check the -rs summary for it.
 .venv/bin/python -m pytest tests -q -rs
 
-# Lint baseline (syntax errors and undefined names), pinned Ruff version,
-# with the two known exceptions documented in the workflow.
-uvx ruff@0.8.6 check --select E9,F63,F7,F82 \
-    --config 'lint.per-file-ignores = {"tabularium/execution.py" = ["F821"], "tests/test_phase1_i7_explain_engine.py" = ["F823"]}' \
-    tabularium tests
+# Lint baseline (syntax errors and undefined names).
+uvx ruff@0.8.6 check --select E9,F63,F7,F82 tabularium tests
 
-# Non-editable wheel smoke test, outside the checkout.
+# Non-editable wheel smoke test without checkout imports.
 uv build --wheel --python 3.12
 uv venv --python 3.12 /tmp/wheel-venv
 uv pip install --python /tmp/wheel-venv dist/*.whl 'pydantic>=2.9,<3'
@@ -46,11 +42,12 @@ uv pip install --python /tmp/wheel-venv dist/*.whl 'pydantic>=2.9,<3'
 
 CI also runs a `pip-audit` dependency audit and checks that no generated
 artifacts (`__pycache__`, `build/`, `dist/`, `*.egg-info`, `*.pyc`) are
-tracked.
+tracked. See the [CI workflow](.github/workflows/ci.yml).
 
-Test scope: the suite is offline. Worker integrations are covered by fixtures;
-no test needs a provider credential, and one real-provider smoke test skips
-when none is set. Do not add tests that call live providers or the network.
+The default suite uses offline worker fixtures and needs no provider
+credentials. Live smoke checks are available to maintainers as an explicit
+opt-in through `TABULARIUM_LIVE_SMOKE`. Keep calls to external services out of
+the default suite. See the [README development guide](README.md#development).
 
 ## Pull requests
 
@@ -64,6 +61,8 @@ when none is set. Do not add tests that call live providers or the network.
 - All CI jobs must pass.
 
 ## Release checklist
+
+Tabularium is not currently published to PyPI.
 
 1. Set the version in `VERSION` and move the **Unreleased** entries in
    `CHANGELOG.md` under that version with the release date.
@@ -80,5 +79,6 @@ when none is set. Do not add tests that call live providers or the network.
    test sandbox, record authorization, worker integrations).
 7. Tag the release commit.
 
-<!-- TODO(owner): decide whether releases are published to PyPI or as GitHub
-releases only, and who may tag. -->
+TODO(owner): Decide who may tag releases.
+
+TODO(owner): Decide whether to publish GitHub Releases for those tags.
