@@ -2,14 +2,14 @@
 # (tabularium/engine/runtime).
 #
 # SCOPE: the runtime path ONLY. This file is deliberately separate from
-# tabularium/engine/requirements.txt, which is the frozen M2 Context Loader dependency
-# declaration and remains PyYAML alone. Nothing under tabularium/engine/context_loader/,
+# the Context Loader's PyYAML-only base dependencies. Nothing under tabularium/engine/context_loader/,
 # tabularium/engine/projection/, tabularium/engine/skills/, or tabularium/engine/workers/ imports anything
 # declared here, and the runtime imports LangGraph lazily so that an absent
 # install disables only the runtime rather than the repository.
 #
-# Declared, not installed globally by this repository.
-#   python -m pip install --user -r tabularium/engine/requirements-runtime.txt
+# Compatibility subset; source of truth: the runtime extra in root pyproject.toml.
+# From the repository root in an activated virtualenv:
+#   python -m pip install -e ".[runtime]"
 
 # Workflow scheduling, suspend/resume, and checkpoint mechanics. Selected in
 # M3.7 by measured bake-off against Microsoft Agent Framework.

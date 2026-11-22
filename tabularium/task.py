@@ -40,8 +40,9 @@ from tabularium.engine.context_loader.discovery import (
 )
 from tabularium.engine.context_loader.validate import SUPPORTED_VERSION
 
-from .execution import _sanitize_fragment
 from .init import InitError, _canonical_target
+from .project_lock import serialized_project
+from .terminal import _sanitize_fragment
 
 # Reason codes reused from the frozen loader taxonomy wherever it can express
 # the outcome; two product-level codes name what only the CLI surface sees.
@@ -657,6 +658,9 @@ def _tasks_directory(target: Path):
     return tasks_dir, None
 
 
+@serialized_project("raw_target", lambda target, exc, args: TaskCreateResult(
+    target=str(target), code=exc.code, message=str(exc)),
+    read_only=lambda args: bool(args.get("print_only")))
 def task_create(raw_target: str | Path | None = None, *,
                 title: str, objective: str, type_: str | None = None,
                 priority: str | None = None, risk: str | None = None,
@@ -848,6 +852,13 @@ class TaskTransitionResult:
         return out
 
 
+def _serialized_transition(command: str):
+    return serialized_project("raw_target", lambda target, exc, args: TaskTransitionResult(
+        command=args.get("command_name", command), target=str(target),
+        record_id=args.get("task_id"), code=exc.code, message=str(exc)))
+
+
+@_serialized_transition("task_transition")
 def task_transition(raw_target: str | Path | None = None,
                     task_id: str = "",
                     target_status: str = "",
@@ -1032,6 +1043,7 @@ def task_transition(raw_target: str | Path | None = None,
         message=f"Transitioned {task_id} from {current_status} to {target_status}.")
 
 
+@_serialized_transition("task_start")
 def task_start(raw_target: str | Path | None = None, task_id: str = "") -> TaskTransitionResult:
     """Start work on a Task (advance to IN_PROGRESS)."""
     target_label = str(raw_target or ".")
@@ -1068,6 +1080,7 @@ def task_start(raw_target: str | Path | None = None, task_id: str = "") -> TaskT
     return task_transition(raw_target, task_id, "IN_PROGRESS", force=True, command_name="task_start")
 
 
+@_serialized_transition("task_approve")
 def task_approve(raw_target: str | Path | None = None, task_id: str = "", *,
                  by: str = "USER") -> TaskTransitionResult:
     """Record human approval for a Task."""
@@ -1102,6 +1115,7 @@ def task_approve(raw_target: str | Path | None = None, task_id: str = "", *,
                            force=True, command_name="task_approve")
 
 
+@_serialized_transition("task_complete")
 def task_complete(raw_target: str | Path | None = None, task_id: str = "") -> TaskTransitionResult:
     """Mark an active Task as COMPLETED."""
     target_label = str(raw_target or ".")

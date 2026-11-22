@@ -6,8 +6,8 @@ through its `mock_response` path — real request shaping, a real
 `ModelResponse`, real usage and cost accounting — with no network and no
 credentials; that group is gated on the dependency being present.
 
-The only environment-dependent skip is the real provider smoke test, which
-needs a credential this repository must never contain.
+The real provider request lives in tests/test_live_smoke.py and runs only when
+explicitly requested; nothing here reaches a provider.
 
 Run:  python -m unittest discover -s tests -t .
 """
@@ -15,7 +15,6 @@ Run:  python -m unittest discover -s tests -t .
 from __future__ import annotations
 
 import copy
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -633,40 +632,6 @@ class TestRealLiteLLM(unittest.TestCase):
         self.assertGreater(result.usage["total_tokens"], 0)
         cost = result.usage["cost_usd"]
         self.assertTrue(cost is None or isinstance(cost, float))
-
-
-# --- real provider smoke ----------------------------------------------------
-
-class TestRealProviderSmoke(unittest.TestCase):
-    """The one environment-dependent skip: needs a real credential."""
-
-    PROVIDER_KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-                     "GEMINI_API_KEY", "AZURE_API_KEY", "GROQ_API_KEY")
-
-    def test_bounded_real_provider_call(self):
-        if not LITELLM:
-            raise unittest.SkipTest("LiteLLM not installed")
-        available = [k for k in self.PROVIDER_KEYS if os.environ.get(k)]
-        if not available:
-            raise unittest.SkipTest(
-                "no provider credential in the environment (checked: "
-                + ", ".join(self.PROVIDER_KEYS)
-                + "); real provider smoke unavailable. LiteLLM integration is "
-                  "still covered by TestRealLiteLLM without network.")
-        model = {"OPENAI_API_KEY": "openai/gpt-4o-mini",
-                 "ANTHROPIC_API_KEY": ANTHROPIC_MODEL,
-                 "GEMINI_API_KEY": "gemini/gemini-2.0-flash",
-                 "GROQ_API_KEY": "groq/llama-3.1-8b-instant",
-                 }.get(available[0])
-        if model is None:  # pragma: no cover
-            raise unittest.SkipTest(f"no bounded model mapped for {available[0]}")
-        result = APIWorker(
-            model_target=ModelTarget(model, max_output_tokens=16,
-                                     temperature=0.0)).execute(
-            request(intent="Return exactly the text API_WORKER_OK "
-                           "and nothing else. Make no changes."))
-        self.assertEqual(result.status, COMPLETED, result.diagnostics)
-        self.assertIn("API_WORKER_OK", result.output)
 
 
 if __name__ == "__main__":  # pragma: no cover

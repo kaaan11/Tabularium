@@ -190,7 +190,6 @@ class ExplainSentinelTests(ExplainEngineFixture):
             self.assertEqual(real.code, "RUNTIME_START_FAILED")
             self.assertEqual(worker.calls, 0)
             return
-        from tabularium.execution import run_instruction
         saved = dict(sys.modules)
         try:
             for name in hidden:

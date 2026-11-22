@@ -31,11 +31,17 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterator, Tuple
 
+from tabularium.project_lock import serialized_project
+
 from . import gate as G
 from .foundation_validation import validate_foundation_document
 from . import model as M
 
 
+@serialized_project("project_root", lambda target, exc, args: M.PersistenceResult(
+    status=M.DENIED, proposal_id=args["proposal"].proposal_id,
+    target_path=args["proposal"].target_path, reason_codes=(exc.code,),
+    diagnostics=({"code": exc.code, "detail": str(exc)},)))
 def apply_authorized_proposal(proposal: M.PersistenceProposal,
                               project_root: str,
                               authorization: Any,

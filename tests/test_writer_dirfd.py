@@ -182,8 +182,12 @@ class TestWriterDirFdAcceptance(unittest.TestCase):
         def failing_fsync(fd):
             raise OSError(errno.ENOSPC, "No space left on device")
 
-        with patch.object(os, "fsync", side_effect=failing_fsync):
-            result = W.apply_authorized_proposal(proposal, str(self.fx.project), auth)
+        from tabularium.project_lock import project_mutation
+
+        # Fault the report write, after the real project lock is acquired.
+        with project_mutation(self.fx.project):
+            with patch.object(os, "fsync", side_effect=failing_fsync):
+                result = W.apply_authorized_proposal(proposal, str(self.fx.project), auth)
 
         self.assertEqual(result.status, M.FAILED)
         tmp_files = [f for f in os.listdir(reports_dir) if f.startswith(".tabu-") and f.endswith(".tmp")]
@@ -237,7 +241,10 @@ class TestWriterDirFdAcceptance(unittest.TestCase):
             def failing_fsync(fd):
                 raise OSError(errno.ENOSPC, "No space left on device")
 
-            with patch.object(os, "fsync", side_effect=failing_fsync):
+            from tabularium.project_lock import project_mutation
+
+            with project_mutation(self.fx.project), \
+                 patch.object(os, "fsync", side_effect=failing_fsync):
                 prop2 = M.PersistenceProposal(
                     proposal_id="prop-45b",
                     execution_id="exec-45",
