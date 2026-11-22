@@ -126,6 +126,8 @@ class FakeWorkerAdapter:
 class ChangePathFixture(unittest.TestCase):
     """Sets up an initialized, onboarded, clean git repository with a single active Task."""
 
+    change_config_yaml: str | None = None
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="tabu-change-test-")
         self.root = Path(self.temp_dir.name).resolve()
@@ -175,6 +177,11 @@ Initial description.
         self.src_file.parent.mkdir(parents=True, exist_ok=True)
         self.initial_content = "def calculate_total(a, b):\n    return a + b\n"
         self.src_file.write_text(self.initial_content, encoding="utf-8")
+
+        if self.change_config_yaml is not None:
+            (self.root / ".ai" / "change.yaml").write_text(
+                self.change_config_yaml, encoding="utf-8",
+            )
 
         # 5. Initialize git repository and commit initial state
         subprocess.run(["git", "init"], cwd=str(self.root), capture_output=True, check=True)

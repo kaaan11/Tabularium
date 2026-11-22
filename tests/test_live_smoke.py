@@ -30,6 +30,7 @@ import os
 import re
 import subprocess
 import unittest
+from unittest.mock import Mock
 
 from tests.test_v2_09_change_path import ChangePathFixture
 
@@ -127,6 +128,27 @@ def _dist_version(name: str) -> str:
         return "unknown"
 
 
+class _LiveChangeFixture(ChangePathFixture):
+    """Project fixture shared by the live lifecycle and offline preflight test."""
+
+    change_config_yaml = """\
+test_command:
+  - python3
+  - -I
+  - -B
+  - -c
+  - >-
+    from runpy import run_path;
+    assert run_path('src/sample.py')['calculate_total'](2, 3) == 5
+timeout_seconds: 15
+"""
+
+    def _git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=self.root, capture_output=True, text=True, check=True,
+        ).stdout
+
+
 class _LiveChangeLifecycle:
     """Approved and declined `run --change` against one real writable CLI."""
 
@@ -143,29 +165,45 @@ class _LiveChangeLifecycle:
             self.fail(f"live {self.target} smoke requested but the {self.target} "
                       "executable was not found (PATH or the configured override)")
         super().setUp()
+        self.initial_head = self._git("rev-parse", "HEAD").strip()
         self.version = tool_version(self.executable)
 
-    def _run(self, approve: bool):
+    def _run(self, approve: bool, scenario: str, expected_code: str):
         from tabularium.execution import run_instruction
-        return run_instruction(
+
+        confirm = Mock(return_value=approve)
+        result = run_instruction(
             f"Append exactly one line `{MARKER}` to the end of src/sample.py. "
             "Change no other file and nothing else in that file.",
-            self.root, worker=self.worker, change=True, confirm=lambda _: approve)
+            self.root, worker=self.worker, change=True, confirm=confirm,
+        )
+        report(self.target, scenario, self.version, result.code)
+        self.assertEqual(result.code, expected_code, result.message)
+        self.assertEqual(confirm.call_count, 1)
+        self.assertEqual(result.change_result["tests"]["status"], "PASSED")
+        self.assertEqual(len(self.list_worktrees()), 1)
+
+        reports = list((self.root / ".ai" / "reports").glob("RPT-*.md"))
+        self.assertEqual(len(reports), 1)
+        report_text = reports[0].read_text(encoding="utf-8")
+        decision = "APPROVED" if approve else "REJECTED"
+        self.assertIn(f"- Decision: {decision}", report_text)
+        self.assertIn("- Tests: PASSED", report_text)
 
     def test_change_approved_is_applied(self):
-        result = self._run(approve=True)
-        report(self.target, "change-approved", self.version, result.code)
-        self.assertEqual(result.code, "COMPLETED", result.message)
-        self.assertIn(MARKER, self.src_file.read_text(encoding="utf-8"))
+        self._run(approve=True, scenario="change-approved", expected_code="COMPLETED")
+        expected_content = f"{self.initial_content}{MARKER}\n"
+        self.assertEqual(self.src_file.read_bytes(), expected_content.encode("utf-8"))
+        self.assertEqual(self._git("rev-parse", "HEAD^").strip(), self.initial_head)
+        self.assertEqual(self._git("show", "HEAD:src/sample.py"), expected_content)
 
     def test_change_declined_leaves_project_untouched(self):
-        result = self._run(approve=False)
-        report(self.target, "change-declined", self.version, result.code)
-        self.assertEqual(result.code, "APPROVAL_REJECTED", result.message)
-        self.assertEqual(self.src_file.read_text(encoding="utf-8"), self.initial_content)
+        self._run(approve=False, scenario="change-declined", expected_code="APPROVAL_REJECTED")
+        self.assertEqual(self.src_file.read_bytes(), self.initial_content.encode("utf-8"))
+        self.assertEqual(self._git("rev-parse", "HEAD").strip(), self.initial_head)
 
 
-class TestLiveCodexChange(_LiveChangeLifecycle, ChangePathFixture):
+class TestLiveCodexChange(_LiveChangeLifecycle, _LiveChangeFixture):
     target = "codex"
     worker = "native"
 
@@ -174,7 +212,7 @@ class TestLiveCodexChange(_LiveChangeLifecycle, ChangePathFixture):
         return find_native_executable()
 
 
-class TestLiveOpenCodeChange(_LiveChangeLifecycle, ChangePathFixture):
+class TestLiveOpenCodeChange(_LiveChangeLifecycle, _LiveChangeFixture):
     target = "opencode"
     worker = "opencode"
 
